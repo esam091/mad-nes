@@ -10,15 +10,17 @@ use tui::{
     Terminal,
 };
 
+type MemoryBuffer = [u8; 0x10000];
+
 struct Machine {
-    memory: [u8; 0xffff],
+    memory: MemoryBuffer,
 }
 
 impl Machine {
     pub fn load(file_path: &String) -> Result<Machine, std::io::Error> {
         let bytes = std::fs::read(file_path)?;
 
-        let mut memory: [u8; 0xffff] = [0; 0xffff];
+        let mut memory = [0 as u8; 0x10000];
 
         for i in 0..bytes.len() {
             memory[0x8000 + i] = bytes[i];
@@ -26,6 +28,55 @@ impl Machine {
 
         return Ok(Machine { memory: memory });
     }
+}
+
+fn address_widget(buffer: &MemoryBuffer) -> Table {
+    let mut headers = vec!["Address".to_string()];
+
+    for i in 0..=0xf {
+        headers.push(format!("{:02X?}", i));
+    }
+
+    let mut rows = Vec::<Row>::new();
+    for address in (0x8000..=0xffff).step_by(16) {
+        let mut content = vec![format!("{:#04X?}", address)];
+
+        for offset in 0..=0xf {
+            content.push(format!("{:02X?}", buffer[address + offset]));
+        }
+
+        rows.push(Row::new(content));
+    }
+
+    let table = Table::new(rows)
+        .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
+        .block(
+            Block::default()
+                .title("Addresses")
+                .borders(Borders::ALL)
+                .border_type(tui::widgets::BorderType::Double),
+        )
+        .widths(&[
+            Constraint::Length(7),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+            Constraint::Length(2),
+        ]);
+
+    table
 }
 
 fn main() -> Result<(), String> {
@@ -46,25 +97,7 @@ fn main() -> Result<(), String> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let table = Table::new(vec![Row::new(vec!["0xAABB", "00", "66", "FF"])])
-                .header(
-                    Row::new(vec!["Address", "00", "01", "02"])
-                        .style(Style::default().fg(Color::Yellow)),
-                )
-                .block(
-                    Block::default()
-                        .title("Addresses")
-                        .borders(Borders::ALL)
-                        .border_type(tui::widgets::BorderType::Double),
-                )
-                .widths(&[
-                    Constraint::Length(7),
-                    Constraint::Length(2),
-                    Constraint::Length(2),
-                    Constraint::Length(2),
-                ]);
-
-            f.render_widget(table, chunks[0]);
+            f.render_widget(address_widget(&machine.memory), chunks[0]);
         })
         .map_err(|_| "Failed drawing terminal")?;
 
