@@ -18,7 +18,7 @@ struct Machine {
 
 impl Machine {
     pub fn load(file_path: &String) -> Result<Machine, std::io::Error> {
-        let bytes = std::fs::read(file_path)?;
+        let bytes: Vec<u8> = std::fs::read(file_path)?.into_iter().skip(16).collect();
 
         let mut memory = [0 as u8; 0x10000];
 
@@ -30,13 +30,32 @@ impl Machine {
     }
 }
 
+static TABLE_HEADER_CONSTRAINTS: [Constraint; 17] = [
+    Constraint::Length(7),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+    Constraint::Length(2),
+];
+
+static TABLE_HEADERS: [&'static str; 17] = [
+    "Address", "00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0A", "0B", "0C", "0D",
+    "0E", "0F",
+];
+
 fn address_widget(buffer: &MemoryBuffer) -> Table {
-    let mut headers = vec!["Address".to_string()];
-
-    for i in 0..=0xf {
-        headers.push(format!("{:02X?}", i));
-    }
-
     let mut rows = Vec::<Row>::new();
     for address in (0x8000..=0xffff).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
@@ -49,32 +68,14 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
     }
 
     let table = Table::new(rows)
-        .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
+        .header(Row::new(Vec::from(TABLE_HEADERS)).style(Style::default().fg(Color::Yellow)))
         .block(
             Block::default()
                 .title("Addresses")
                 .borders(Borders::ALL)
                 .border_type(tui::widgets::BorderType::Double),
         )
-        .widths(&[
-            Constraint::Length(7),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-        ]);
+        .widths(&TABLE_HEADER_CONSTRAINTS);
 
     table
 }
