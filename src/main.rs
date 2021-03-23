@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, time::Duration};
 
 mod instruction;
 mod machine;
@@ -66,27 +66,29 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
 fn main() -> Result<(), String> {
     let mut machine = Machine::load(&String::from("hello.nes")).unwrap();
 
-    let stdout = io::stdout()
-        .into_raw_mode()
-        .map_err(|_| "Failed retrieving stdout")?;
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).map_err(|_| "Failed creating terminal")?;
+    // let stdout = io::stdout()
+    //     .into_raw_mode()
+    //     .map_err(|_| "Failed retrieving stdout")?;
+    // let backend = TermionBackend::new(stdout);
+    // let mut terminal = Terminal::new(backend).map_err(|_| "Failed creating terminal")?;
 
     loop {
         machine.step();
 
-        terminal.clear().unwrap();
-        terminal
-            .draw(|f| {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(1)
-                    .constraints([Constraint::Percentage(100)].as_ref())
-                    .split(f.size());
+        // terminal.clear().unwrap();
+        // terminal
+        //     .draw(|f| {
+        //         let chunks = Layout::default()
+        //             .direction(Direction::Vertical)
+        //             .margin(1)
+        //             .constraints([Constraint::Percentage(100)].as_ref())
+        //             .split(f.size());
 
-                f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
-            })
-            .map_err(|_| "Failed drawing terminal")?;
+        //         f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+        //     })
+        //     .map_err(|_| "Failed drawing terminal")?;
+
+        // std::thread::sleep(Duration::from_millis(100));
     }
 }
 

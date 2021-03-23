@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Instruction {
     LdaImmediate(u8),
     StaAbsolute(u16),
@@ -7,4 +8,6 @@ pub enum Instruction {
     Beq(u8),
     Inx,
     JmpAbsolute(u16),
+    CpxImmediate(u8),
+    Bne(u8),
 }

@@ -59,6 +59,8 @@ impl Machine {
         let opcode = self.memory[self.pc as usize];
         self.pc += 1;
 
+        // println!("opcode {:#02x?}", opcode);
+
         let instruction: Instruction;
         match opcode {
             0xa9 => {
@@ -85,10 +87,18 @@ impl Machine {
             0x4c => {
                 instruction = Instruction::JmpAbsolute(self.get_word_and_forward_pc());
             }
+            0xe0 => {
+                instruction = Instruction::CpxImmediate(self.get_byte_and_forward_pc());
+            }
+            0xd0 => {
+                instruction = Instruction::Bne(self.get_byte_and_forward_pc());
+            }
             _ => {
                 panic!("Cannot parse opcode {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode);
             }
         }
+
+        // println!("instruction: {:#04X?}", instruction);
 
         match instruction {
             Instruction::LdaImmediate(value) => {
@@ -111,14 +121,21 @@ impl Machine {
                 if self.zero_flag {
                     self.pc += value as u16;
                 }
-
-                self.zero_flag = false;
             }
             Instruction::Inx => {
                 self.x += 1;
             }
             Instruction::JmpAbsolute(address) => {
                 self.pc = address;
+            }
+            Instruction::CpxImmediate(value) => {
+                let result = self.x.overflowing_sub(value);
+                self.zero_flag = result.0 == 0;
+            }
+            Instruction::Bne(offset) => {
+                if !self.zero_flag {
+                    self.pc += offset as u16;
+                }
             }
         }
     }
