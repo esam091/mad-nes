@@ -47,6 +47,20 @@ impl Machine {
         });
     }
 
+    fn get_byte_and_forward_pc(&mut self) -> u8 {
+        let value = self.memory[self.pc as usize];
+        self.pc += 1;
+
+        return value;
+    }
+
+    fn get_word_and_forward_pc(&mut self) -> u16 {
+        let byte1 = self.get_byte_and_forward_pc();
+        let byte2 = self.get_byte_and_forward_pc();
+
+        return u16::from_le_bytes([byte1, byte2]);
+    }
+
     pub fn step(&mut self) {
         let opcode = self.memory[self.pc as usize];
         self.pc += 1;
@@ -54,18 +68,10 @@ impl Machine {
         let instruction: Option<Instruction>;
         match opcode {
             0xa9 => {
-                let byte = self.memory[self.pc as usize];
-                self.pc += 1;
-
-                instruction = Some(Instruction::LdaImmediate(byte));
+                instruction = Some(Instruction::LdaImmediate(self.get_byte_and_forward_pc()));
             }
             0x8d => {
-                let byte1 = self.memory[self.pc as usize];
-                let byte2 = self.memory[(self.pc + 1) as usize];
-
-                let word = u16::from_le_bytes([byte1, byte2]);
-
-                instruction = Some(Instruction::StaAbsolute(word));
+                instruction = Some(Instruction::StaAbsolute(self.get_word_and_forward_pc()));
             }
             _ => {
                 instruction = None;
