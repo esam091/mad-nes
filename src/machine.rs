@@ -60,6 +60,7 @@ impl Machine {
         self.pc += 1;
 
         // println!("opcode {:#02x?}", opcode);
+        println!("pc {:#02x?}", self.pc);
 
         let instruction: Instruction;
         match opcode {
