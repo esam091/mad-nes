@@ -65,7 +65,7 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
 
 fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
-    for address in (0x2000..=0x2200).step_by(16) {
+    for address in (0x2000..=0x2100).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -145,13 +145,13 @@ fn main() -> Result<(), String> {
                         let is_on = val != 0;
 
                         let color = if is_on {
-                            sdl2::pixels::Color::RGB(1, 1, 1)
+                            sdl2::pixels::Color::RGB(255, 255, 255)
                         } else {
                             sdl2::pixels::Color::RGB(0, 0, 0)
                         };
 
-                        let y = pattern_row * row;
-                        let x = pattern_col * col;
+                        let y = pattern_row + row * 8;
+                        let x = pattern_col + col * 8;
 
                         let xx: i32 = x.try_into().unwrap();
                         let yy: i32 = y.try_into().unwrap();
