@@ -1,5 +1,8 @@
-use std::io;
+use std::{io, usize};
 
+mod instruction;
+
+use instruction::Instruction;
 use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
@@ -14,6 +17,8 @@ type MemoryBuffer = [u8; 0x10000];
 
 struct Machine {
     memory: MemoryBuffer,
+    pc: u16,
+    a: u8,
 }
 
 impl Machine {
@@ -32,7 +37,37 @@ impl Machine {
         memory[0xfffc] = bytes[0x3ffc];
         memory[0xfffd] = bytes[0x3ffd];
 
-        return Ok(Machine { memory: memory });
+        // jump to reset vector
+        let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
+
+        return Ok(Machine {
+            memory: memory,
+            pc: initial_address,
+        });
+    }
+
+    pub fn step(&mut self) {
+        let opcode = self.memory[self.pc as usize];
+        self.pc += 1;
+
+        let instruction: Option<Instruction>;
+        match opcode {
+            0xa9 => {
+                let byte = self.memory[self.pc as usize];
+                self.pc += 1;
+
+                instruction = Some(Instruction::LdaImmediate(byte));
+            }
+            _ => {
+                instruction = None;
+            }
+        }
+
+        match instruction.expect("Instruction not found, opcode might not have been implemented") {
+            Instruction::LdaImmediate(value) => {
+                self.a = value;
+            }
+        }
     }
 }
 
