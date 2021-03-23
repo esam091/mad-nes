@@ -94,7 +94,7 @@ impl Machine {
                 instruction = Instruction::Bne(self.get_byte_and_forward_pc());
             }
             _ => {
-                panic!("Cannot parse opcode {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode);
+                panic!("Cannot parse opcode {:#02x?} at pc {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode, self.pc);
             }
         }
 
@@ -134,7 +134,8 @@ impl Machine {
             }
             Instruction::Bne(offset) => {
                 if !self.zero_flag {
-                    self.pc += offset as u16;
+                    let a = self.pc as i16 + (offset as i8) as i16;
+                    self.pc = a as u16;
                 }
             }
         }
