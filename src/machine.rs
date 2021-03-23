@@ -2,7 +2,7 @@ use crate::instruction::Instruction;
 
 pub type MemoryBuffer = [u8; 0x10000];
 pub struct Machine {
-    pub memory: MemoryBuffer,
+    memory: MemoryBuffer,
     pc: u16,
     a: u8,
 }
@@ -72,5 +72,9 @@ impl Machine {
                 self.memory[value as usize] = self.a;
             }
         }
+    }
+
+    pub fn get_buffer(&self) -> &MemoryBuffer {
+        &self.memory
     }
 }

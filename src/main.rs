@@ -81,7 +81,7 @@ fn main() -> Result<(), String> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            f.render_widget(address_widget(&machine.memory), chunks[0]);
+            f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
         })
         .map_err(|_| "Failed drawing terminal")?;
 
