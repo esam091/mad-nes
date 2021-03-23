@@ -1,4 +1,4 @@
-use std::{io, time::Duration};
+use std::{convert::TryInto, io, time::Duration};
 
 mod instruction;
 mod machine;
@@ -40,7 +40,7 @@ static TABLE_HEADERS: [&'static str; 17] = [
 
 fn address_widget(buffer: &MemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
-    for address in (0x8000..=0x8200).step_by(16) {
+    for address in (0x2000..=0x2100).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -102,6 +102,50 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
+
+        for row in 0..30 {
+            for col in 0..32 {
+                let nametable_address = row * 32 + col + 0x2000;
+
+                let nametable_value = machine.get_video_buffer()[nametable_address];
+
+                let pattern_table_address = nametable_value as usize * 0x10;
+
+                for pattern_row in 0..8 {
+                    let addr = pattern_table_address + pattern_row;
+                    let bits = machine.get_video_buffer()[addr];
+
+                    for pattern_col in 0..8 {
+                        let val = bits & (1 << (7 - pattern_col));
+                        let is_on = val != 0;
+
+                        let color = if is_on {
+                            sdl2::pixels::Color::RGB(1, 1, 1)
+                        } else {
+                            sdl2::pixels::Color::RGB(0, 0, 0)
+                        };
+
+                        let y = pattern_row * row;
+                        let x = pattern_col * col;
+
+                        let xx: i32 = x.try_into().unwrap();
+                        let yy: i32 = y.try_into().unwrap();
+
+                        canvas.set_draw_color(color);
+                        canvas
+                            .fill_rect(sdl2::rect::Rect::new(
+                                xx * SCALE as i32,
+                                yy * SCALE as i32,
+                                SCALE,
+                                SCALE,
+                            ))
+                            .unwrap();
+                    }
+                }
+            }
+        }
+
+        canvas.present();
 
         terminal
             .draw(|f| {

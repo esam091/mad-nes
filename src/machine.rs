@@ -184,4 +184,8 @@ impl Machine {
     pub fn get_buffer(&self) -> &MemoryBuffer {
         &self.memory
     }
+
+    pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {
+        &self.video_memory
+    }
 }
