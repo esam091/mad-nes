@@ -59,6 +59,14 @@ impl Machine {
 
                 instruction = Some(Instruction::LdaImmediate(byte));
             }
+            0x8d => {
+                let byte1 = self.memory[self.pc as usize];
+                let byte2 = self.memory[(self.pc + 1) as usize];
+
+                let word = u16::from_le_bytes([byte1, byte2]);
+
+                instruction = Some(Instruction::StaAbsolute(word));
+            }
             _ => {
                 instruction = None;
             }
@@ -67,6 +75,9 @@ impl Machine {
         match instruction.expect("Instruction not found, opcode might not have been implemented") {
             Instruction::LdaImmediate(value) => {
                 self.a = value;
+            }
+            Instruction::StaAbsolute(value) => {
+                self.memory[value as usize] = self.a;
             }
         }
     }
