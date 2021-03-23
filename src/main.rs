@@ -63,8 +63,27 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
     table
 }
 
+const SCALE: u32 = 3;
+
 fn main() -> Result<(), String> {
     let mut machine = Machine::load(&String::from("hello.nes")).unwrap();
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem
+        .window("NES Emulator", 256 * SCALE, 240 * SCALE)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
+    canvas.clear();
+    canvas.present();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
 
     let stdout = io::stdout()
         .into_raw_mode()
@@ -74,8 +93,15 @@ fn main() -> Result<(), String> {
 
     terminal.clear().unwrap();
 
-    loop {
+    'running: loop {
         machine.step();
+
+        for event in event_pump.poll_iter() {
+            match event {
+                sdl2::event::Event::Quit { .. } => break 'running,
+                _ => {}
+            }
+        }
 
         terminal
             .draw(|f| {
@@ -91,6 +117,8 @@ fn main() -> Result<(), String> {
 
         std::thread::sleep(Duration::from_millis(17));
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
