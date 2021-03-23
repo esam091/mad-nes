@@ -43,6 +43,7 @@ impl Machine {
         return Ok(Machine {
             memory: memory,
             pc: initial_address,
+            a: 0,
         });
     }
 
