@@ -8,6 +8,8 @@ pub struct Machine {
     pc: u16,
     a: u8,
     x: u8,
+
+    zero_flag: bool,
 }
 
 impl Machine {
@@ -34,6 +36,8 @@ impl Machine {
             pc: initial_address,
             a: 0,
             x: 0,
+
+            zero_flag: false,
         });
     }
 
@@ -69,6 +73,18 @@ impl Machine {
             0xbd => {
                 instruction = Instruction::LdaXAbsolute(self.get_word_and_forward_pc());
             }
+            0xc9 => {
+                instruction = Instruction::CmpImmediate(self.get_byte_and_forward_pc());
+            }
+            0xf0 => {
+                instruction = Instruction::Beq(self.get_byte_and_forward_pc());
+            }
+            0xe8 => {
+                instruction = Instruction::Inx;
+            }
+            0x4c => {
+                instruction = Instruction::JmpAbsolute(self.get_word_and_forward_pc());
+            }
             _ => {
                 panic!("Cannot parse opcode {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode);
             }
@@ -86,6 +102,23 @@ impl Machine {
             }
             Instruction::LdaXAbsolute(value) => {
                 self.a = self.memory[value as usize + self.x as usize];
+            }
+            Instruction::CmpImmediate(value) => {
+                let result = self.a.overflowing_sub(value);
+                self.zero_flag = result.0 == 0;
+            }
+            Instruction::Beq(value) => {
+                if self.zero_flag {
+                    self.pc += value as u16;
+                }
+
+                self.zero_flag = false;
+            }
+            Instruction::Inx => {
+                self.x += 1;
+            }
+            Instruction::JmpAbsolute(address) => {
+                self.pc = address;
             }
         }
     }

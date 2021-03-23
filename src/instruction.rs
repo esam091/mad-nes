@@ -3,4 +3,8 @@ pub enum Instruction {
     StaAbsolute(u16),
     LdxImmediate(u8),
     LdaXAbsolute(u16),
+    CmpImmediate(u8),
+    Beq(u8),
+    Inx,
+    JmpAbsolute(u16),
 }
