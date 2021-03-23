@@ -1,6 +1,9 @@
+use std::u8;
+
 use crate::instruction::Instruction;
 
 pub type MemoryBuffer = [u8; 0x10000];
+pub type VideoMemoryBuffer = [u8; 0x4000];
 
 #[derive(PartialEq, Eq)]
 pub struct Machine {
@@ -10,6 +13,11 @@ pub struct Machine {
     x: u8,
 
     zero_flag: bool,
+
+    video_memory: VideoMemoryBuffer,
+    video_addr1: Option<u8>,
+    video_addr2: Option<u8>,
+    video_offset: u8,
 }
 
 impl Machine {
@@ -38,6 +46,11 @@ impl Machine {
             x: 0,
 
             zero_flag: false,
+
+            video_memory: [0; 0x4000],
+            video_addr1: None,
+            video_addr2: None,
+            video_offset: 0,
         });
     }
 
@@ -55,12 +68,38 @@ impl Machine {
         return u16::from_le_bytes([byte1, byte2]);
     }
 
+    fn set_memory_value(&mut self, address: u16, value: u8) {
+        self.memory[address as usize] = value;
+
+        match address {
+            0x2006 => match (self.video_addr1, self.video_addr2) {
+                (None, None) => self.video_addr1 = Some(value),
+                (Some(_), None) => self.video_addr2 = Some(value),
+                (Some(_), Some(_)) => {
+                    self.video_addr1 = Some(value);
+                    self.video_addr2 = None;
+                }
+                (None, Some(_)) => panic!("Unlikely 0x2006 condition"),
+            },
+
+            0x2007 => match (self.video_addr1, self.video_addr2) {
+                (Some(addr1), Some(addr2)) => {
+                    let address = u16::from_be_bytes([addr1, addr2]);
+                    self.video_memory[address as usize] = value;
+                    self.video_offset += 1;
+                }
+                _ => panic!("Video registry error"),
+            },
+            _ => {}
+        }
+    }
+
     pub fn step(&mut self) {
         let opcode = self.memory[self.pc as usize];
         self.pc += 1;
 
         // println!("opcode {:#02x?}", opcode);
-        println!("pc {:#02x?}", self.pc);
+        // println!("pc {:#02x?}", self.pc);
 
         let instruction: Instruction;
         match opcode {
@@ -105,8 +144,8 @@ impl Machine {
             Instruction::LdaImmediate(value) => {
                 self.a = value;
             }
-            Instruction::StaAbsolute(value) => {
-                self.memory[value as usize] = self.a;
+            Instruction::StaAbsolute(address) => {
+                self.set_memory_value(address, self.a);
             }
             Instruction::LdxImmediate(value) => {
                 self.x = value;
