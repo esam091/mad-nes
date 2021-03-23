@@ -78,6 +78,7 @@ impl Machine {
                 (Some(_), Some(_)) => {
                     self.video_addr1 = Some(value);
                     self.video_addr2 = None;
+                    self.video_offset = 0;
                 }
                 (None, Some(_)) => panic!("Unlikely 0x2006 condition"),
             },
@@ -85,7 +86,7 @@ impl Machine {
             0x2007 => match (self.video_addr1, self.video_addr2) {
                 (Some(addr1), Some(addr2)) => {
                     let address = u16::from_be_bytes([addr1, addr2]);
-                    self.video_memory[address as usize] = value;
+                    self.video_memory[self.video_offset as usize + address as usize] = value;
                     self.video_offset += 1;
                 }
                 _ => panic!("Video registry error"),

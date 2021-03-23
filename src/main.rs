@@ -3,7 +3,7 @@ use std::{convert::TryInto, io, time::Duration};
 mod instruction;
 mod machine;
 
-use machine::{Machine, MemoryBuffer};
+use machine::{Machine, MemoryBuffer, VideoMemoryBuffer};
 use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
@@ -41,6 +41,31 @@ static TABLE_HEADERS: [&'static str; 17] = [
 fn address_widget(buffer: &MemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
     for address in (0x2000..=0x2100).step_by(16) {
+        let mut content = vec![format!("{:#04X?}", address)];
+
+        for offset in 0..=0xf {
+            content.push(format!("{:02X?}", buffer[address + offset]));
+        }
+
+        rows.push(Row::new(content));
+    }
+
+    let table = Table::new(rows)
+        .header(Row::new(Vec::from(TABLE_HEADERS)).style(Style::default().fg(Color::Yellow)))
+        .block(
+            Block::default()
+                .title("Addresses")
+                .borders(Borders::ALL)
+                .border_type(tui::widgets::BorderType::Double),
+        )
+        .widths(&TABLE_HEADER_CONSTRAINTS);
+
+    table
+}
+
+fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
+    let mut rows = Vec::<Row>::new();
+    for address in (0x2000..=0x2200).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -155,11 +180,12 @@ fn main() -> Result<(), String> {
                     .constraints([Constraint::Percentage(100)].as_ref())
                     .split(f.size());
 
-                f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+                // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+                f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
             })
             .map_err(|_| "Failed drawing terminal")?;
 
-        std::thread::sleep(Duration::from_millis(17));
+        // std::thread::sleep(Duration::from_millis(3));
     }
 
     Ok(())
