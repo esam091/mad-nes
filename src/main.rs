@@ -64,7 +64,7 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
 }
 
 fn main() -> Result<(), String> {
-    let machine = Machine::load(&String::from("hello.nes")).unwrap();
+    let mut machine = Machine::load(&String::from("hello.nes")).unwrap();
 
     let stdout = io::stdout()
         .into_raw_mode()
@@ -72,20 +72,22 @@ fn main() -> Result<(), String> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend).map_err(|_| "Failed creating terminal")?;
 
-    terminal.clear().unwrap();
-    terminal
-        .draw(|f| {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(1)
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .split(f.size());
+    loop {
+        machine.step();
 
-            f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
-        })
-        .map_err(|_| "Failed drawing terminal")?;
+        terminal.clear().unwrap();
+        terminal
+            .draw(|f| {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(1)
+                    .constraints([Constraint::Percentage(100)].as_ref())
+                    .split(f.size());
 
-    Ok(())
+                f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+            })
+            .map_err(|_| "Failed drawing terminal")?;
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +100,7 @@ mod tests {
         assert_eq!(u16::from_be_bytes([0xaa, 0xbb]), 0xaabb);
         assert_eq!(u16::from_be(0xbbaa), 0xaabb);
         assert_eq!(0b1111, 15);
+
+        assert_eq!(255u8.overflowing_add(3), (2, true));
     }
 }

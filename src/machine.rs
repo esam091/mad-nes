@@ -1,10 +1,13 @@
 use crate::instruction::Instruction;
 
 pub type MemoryBuffer = [u8; 0x10000];
+
+#[derive(PartialEq, Eq)]
 pub struct Machine {
     memory: MemoryBuffer,
     pc: u16,
     a: u8,
+    x: u8,
 }
 
 impl Machine {
@@ -30,6 +33,7 @@ impl Machine {
             memory: memory,
             pc: initial_address,
             a: 0,
+            x: 0,
         });
     }
 
@@ -51,25 +55,37 @@ impl Machine {
         let opcode = self.memory[self.pc as usize];
         self.pc += 1;
 
-        let instruction: Option<Instruction>;
+        let instruction: Instruction;
         match opcode {
             0xa9 => {
-                instruction = Some(Instruction::LdaImmediate(self.get_byte_and_forward_pc()));
+                instruction = Instruction::LdaImmediate(self.get_byte_and_forward_pc());
             }
             0x8d => {
-                instruction = Some(Instruction::StaAbsolute(self.get_word_and_forward_pc()));
+                instruction = Instruction::StaAbsolute(self.get_word_and_forward_pc());
+            }
+            0xa2 => {
+                instruction = Instruction::LdxImmediate(self.get_byte_and_forward_pc());
+            }
+            0xbd => {
+                instruction = Instruction::LdaXAbsolute(self.get_word_and_forward_pc());
             }
             _ => {
-                instruction = None;
+                panic!("Cannot parse opcode {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode);
             }
         }
 
-        match instruction.expect("Instruction not found, opcode might not have been implemented") {
+        match instruction {
             Instruction::LdaImmediate(value) => {
                 self.a = value;
             }
             Instruction::StaAbsolute(value) => {
                 self.memory[value as usize] = self.a;
+            }
+            Instruction::LdxImmediate(value) => {
+                self.x = value;
+            }
+            Instruction::LdaXAbsolute(value) => {
+                self.a = self.memory[value as usize + self.x as usize];
             }
         }
     }
