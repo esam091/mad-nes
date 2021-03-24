@@ -65,7 +65,7 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
 
 fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
-    for address in (0x2200..=0x2400).step_by(16) {
+    for address in (0x3f00..=0x3f10).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -89,63 +89,71 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
 }
 
 const SCALE: u32 = 3;
-const PALETTE: [(u8, u8, u8); 56] = [
-    (84, 84, 84),
-    (0, 30, 116),
-    (8, 16, 144),
-    (48, 0, 136),
-    (68, 0, 100),
-    (92, 0, 48),
-    (84, 4, 0),
-    (60, 24, 0),
-    (32, 42, 0),
-    (8, 58, 0),
-    (0, 64, 0),
-    (0, 60, 0),
-    (0, 50, 60),
-    (0, 0, 0),
-    (152, 150, 152),
-    (8, 76, 196),
-    (48, 50, 236),
-    (92, 30, 228),
-    (136, 20, 176),
-    (160, 20, 100),
-    (152, 34, 32),
-    (120, 60, 0),
-    (84, 90, 0),
-    (40, 114, 0),
-    (8, 124, 0),
-    (0, 118, 40),
-    (0, 102, 120),
-    (0, 0, 0),
-    (236, 238, 236),
-    (76, 154, 236),
-    (120, 124, 236),
-    (176, 98, 236),
-    (228, 84, 236),
-    (236, 88, 180),
-    (236, 106, 100),
-    (212, 136, 32),
-    (160, 170, 0),
-    (116, 196, 0),
-    (76, 208, 32),
-    (56, 204, 108),
-    (56, 180, 204),
-    (60, 60, 60),
-    (236, 238, 236),
-    (168, 204, 236),
-    (188, 188, 236),
-    (212, 178, 236),
-    (236, 174, 236),
-    (236, 174, 212),
-    (236, 180, 176),
-    (228, 196, 144),
-    (204, 210, 120),
-    (180, 222, 120),
-    (168, 226, 144),
-    (152, 226, 180),
-    (160, 214, 228),
-    (160, 162, 160),
+const PALETTE: [(u8, u8, u8); 64] = [
+    (0x80, 0x80, 0x80),
+    (0x00, 0x3D, 0xA6),
+    (0x00, 0x12, 0xB0),
+    (0x44, 0x00, 0x96),
+    (0xA1, 0x00, 0x5E),
+    (0xC7, 0x00, 0x28),
+    (0xBA, 0x06, 0x00),
+    (0x8C, 0x17, 0x00),
+    (0x5C, 0x2F, 0x00),
+    (0x10, 0x45, 0x00),
+    (0x05, 0x4A, 0x00),
+    (0x00, 0x47, 0x2E),
+    (0x00, 0x41, 0x66),
+    (0x00, 0x00, 0x00),
+    (0x05, 0x05, 0x05),
+    (0x05, 0x05, 0x05),
+    (0xC7, 0xC7, 0xC7),
+    (0x00, 0x77, 0xFF),
+    (0x21, 0x55, 0xFF),
+    (0x82, 0x37, 0xFA),
+    (0xEB, 0x2F, 0xB5),
+    (0xFF, 0x29, 0x50),
+    (0xFF, 0x22, 0x00),
+    (0xD6, 0x32, 0x00),
+    (0xC4, 0x62, 0x00),
+    (0x35, 0x80, 0x00),
+    (0x05, 0x8F, 0x00),
+    (0x00, 0x8A, 0x55),
+    (0x00, 0x99, 0xCC),
+    (0x21, 0x21, 0x21),
+    (0x09, 0x09, 0x09),
+    (0x09, 0x09, 0x09),
+    (0xFF, 0xFF, 0xFF),
+    (0x0F, 0xD7, 0xFF),
+    (0x69, 0xA2, 0xFF),
+    (0xD4, 0x80, 0xFF),
+    (0xFF, 0x45, 0xF3),
+    (0xFF, 0x61, 0x8B),
+    (0xFF, 0x88, 0x33),
+    (0xFF, 0x9C, 0x12),
+    (0xFA, 0xBC, 0x20),
+    (0x9F, 0xE3, 0x0E),
+    (0x2B, 0xF0, 0x35),
+    (0x0C, 0xF0, 0xA4),
+    (0x05, 0xFB, 0xFF),
+    (0x5E, 0x5E, 0x5E),
+    (0x0D, 0x0D, 0x0D),
+    (0x0D, 0x0D, 0x0D),
+    (0xFF, 0xFF, 0xFF),
+    (0xA6, 0xFC, 0xFF),
+    (0xB3, 0xEC, 0xFF),
+    (0xDA, 0xAB, 0xEB),
+    (0xFF, 0xA8, 0xF9),
+    (0xFF, 0xAB, 0xB3),
+    (0xFF, 0xD2, 0xB0),
+    (0xFF, 0xEF, 0xA6),
+    (0xFF, 0xF7, 0x9C),
+    (0xD7, 0xE8, 0x95),
+    (0xA6, 0xED, 0xAF),
+    (0xA2, 0xF2, 0xDA),
+    (0x99, 0xFF, 0xFC),
+    (0xDD, 0xDD, 0xDD),
+    (0x11, 0x11, 0x11),
+    (0x11, 0x11, 0x11),
 ];
 
 fn palette_number(left: u8, right: u8, index: usize) -> u32 {
@@ -199,6 +207,19 @@ fn main() -> Result<(), String> {
             }
         }
 
+        terminal
+            .draw(|f| {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(1)
+                    .constraints([Constraint::Percentage(100)].as_ref())
+                    .split(f.size());
+
+                // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+                f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
+            })
+            .map_err(|_| "Failed drawing terminal")?;
+
         for row in 0..30 {
             for col in 0..32 {
                 let nametable_address = row * 32 + col + 0x2000;
@@ -214,18 +235,18 @@ fn main() -> Result<(), String> {
                     machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
 
                 let top_left = attribute_value & 0b11;
-                let top_right = attribute_value.bitand(0b1100) >> 2;
-                let bottom_left = attribute_value.bitand(0b110000) >> 4;
-                let bottom_right = attribute_value.bitand(0b11000000) >> 6;
+                let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
+                let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
+                let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
 
                 let subtile_y = row % 4;
                 let subtile_x = col % 4;
 
                 let palette_set = match (subtile_x / 2, subtile_y / 2) {
                     (0, 0) => top_left,
-                    (0, 1) => top_right,
-                    (1, 0) => bottom_left,
-                    (1, 1) => bottom_right,
+                    (1, 0) => top_right,
+                    (1, 1) => bottom_left,
+                    (0, 1) => bottom_right,
                     _ => panic!("Impossible subtile location!"),
                 };
 
@@ -236,11 +257,22 @@ fn main() -> Result<(), String> {
 
                     for pattern_col in 0..8 {
                         let palette_value = palette_number(bits, bits2, pattern_col);
-                        let palette_index = palette_set as u32 * 4 + palette_value;
+                        let palette_index = if palette_value == 0 {
+                            0
+                        } else {
+                            palette_set as u32 * 4 + palette_value
+                        };
 
                         let color_index =
                             machine.get_video_buffer()[0x3f00 + palette_index as usize];
 
+                        if color_index as usize > PALETTE.len() {
+                            panic!(
+                                "color index {:#02x?}, requested at address {:#02x?}",
+                                color_index,
+                                0x3f00 + palette_index
+                            );
+                        }
                         let (r, g, b) = PALETTE[color_index as usize];
                         let color = sdl2::pixels::Color::RGB(r, g, b);
                         // let color = match palette_value {
@@ -272,19 +304,6 @@ fn main() -> Result<(), String> {
         }
 
         canvas.present();
-
-        terminal
-            .draw(|f| {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(1)
-                    .constraints([Constraint::Percentage(100)].as_ref())
-                    .split(f.size());
-
-                // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
-                f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
-            })
-            .map_err(|_| "Failed drawing terminal")?;
 
         // std::thread::sleep(Duration::from_millis(3));
     }
