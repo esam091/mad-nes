@@ -1,4 +1,4 @@
-use std::{convert::TryInto, io, ops::BitAnd, time::Duration};
+use std::{convert::TryInto, env, io, ops::BitAnd, time::Duration};
 
 mod instruction;
 mod machine;
@@ -103,7 +103,8 @@ fn palette_number(left: u8, right: u8, index: usize) -> u32 {
 }
 
 fn main() -> Result<(), String> {
-    let mut machine = Machine::load(&String::from("hello.nes")).unwrap();
+    let args: Vec<String> = env::args().collect();
+    let mut machine = Machine::load(&args[1]).unwrap();
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
