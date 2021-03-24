@@ -89,6 +89,64 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
 }
 
 const SCALE: u32 = 3;
+const PALETTE: [(u8, u8, u8); 56] = [
+    (84, 84, 84),
+    (0, 30, 116),
+    (8, 16, 144),
+    (48, 0, 136),
+    (68, 0, 100),
+    (92, 0, 48),
+    (84, 4, 0),
+    (60, 24, 0),
+    (32, 42, 0),
+    (8, 58, 0),
+    (0, 64, 0),
+    (0, 60, 0),
+    (0, 50, 60),
+    (0, 0, 0),
+    (152, 150, 152),
+    (8, 76, 196),
+    (48, 50, 236),
+    (92, 30, 228),
+    (136, 20, 176),
+    (160, 20, 100),
+    (152, 34, 32),
+    (120, 60, 0),
+    (84, 90, 0),
+    (40, 114, 0),
+    (8, 124, 0),
+    (0, 118, 40),
+    (0, 102, 120),
+    (0, 0, 0),
+    (236, 238, 236),
+    (76, 154, 236),
+    (120, 124, 236),
+    (176, 98, 236),
+    (228, 84, 236),
+    (236, 88, 180),
+    (236, 106, 100),
+    (212, 136, 32),
+    (160, 170, 0),
+    (116, 196, 0),
+    (76, 208, 32),
+    (56, 204, 108),
+    (56, 180, 204),
+    (60, 60, 60),
+    (236, 238, 236),
+    (168, 204, 236),
+    (188, 188, 236),
+    (212, 178, 236),
+    (236, 174, 236),
+    (236, 174, 212),
+    (236, 180, 176),
+    (228, 196, 144),
+    (204, 210, 120),
+    (180, 222, 120),
+    (168, 226, 144),
+    (152, 226, 180),
+    (160, 214, 228),
+    (160, 162, 160),
+];
 
 fn palette_number(left: u8, right: u8, index: usize) -> u32 {
     let is_left_on = left.bitand(1 << (7 - index)) != 0;
@@ -149,6 +207,28 @@ fn main() -> Result<(), String> {
 
                 let pattern_table_address = nametable_value as usize * 0x10;
 
+                let attribute_y = row / 4;
+                let attribute_x = col / 4;
+
+                let attribute_value =
+                    machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
+
+                let top_left = attribute_value & 0b11;
+                let top_right = attribute_value.bitand(0b1100) >> 2;
+                let bottom_left = attribute_value.bitand(0b110000) >> 4;
+                let bottom_right = attribute_value.bitand(0b11000000) >> 6;
+
+                let subtile_y = row % 4;
+                let subtile_x = col % 4;
+
+                let palette_set = match (subtile_x / 2, subtile_y / 2) {
+                    (0, 0) => top_left,
+                    (0, 1) => top_right,
+                    (1, 0) => bottom_left,
+                    (1, 1) => bottom_right,
+                    _ => panic!("Impossible subtile location!"),
+                };
+
                 for pattern_row in 0..8 {
                     let addr = pattern_table_address + pattern_row;
                     let bits = machine.get_video_buffer()[addr];
@@ -156,14 +236,20 @@ fn main() -> Result<(), String> {
 
                     for pattern_col in 0..8 {
                         let palette_value = palette_number(bits, bits2, pattern_col);
+                        let palette_index = palette_set as u32 * 4 + palette_value;
 
-                        let color = match palette_value {
-                            0 => sdl2::pixels::Color::RGB(0, 0, 0),
-                            1 => sdl2::pixels::Color::RGB(0xff, 00, 00),
-                            2 => sdl2::pixels::Color::RGB(0, 0xff, 0),
-                            3 => sdl2::pixels::Color::RGB(0, 0, 0xff),
-                            _ => panic!("Impossible color palette: {}", palette_value),
-                        };
+                        let color_index =
+                            machine.get_video_buffer()[0x3f00 + palette_index as usize];
+
+                        let (r, g, b) = PALETTE[color_index as usize];
+                        let color = sdl2::pixels::Color::RGB(r, g, b);
+                        // let color = match palette_value {
+                        //     0 => sdl2::pixels::Color::RGB(0, 0, 0),
+                        //     1 => sdl2::pixels::Color::RGB(0xff, 00, 00),
+                        //     2 => sdl2::pixels::Color::RGB(0, 0xff, 0),
+                        //     3 => sdl2::pixels::Color::RGB(0, 0, 0xff),
+                        //     _ => panic!("Impossible color palette: {}", palette_value),
+                        // };
 
                         let y = pattern_row + row * 8;
                         let x = pattern_col + col * 8;
