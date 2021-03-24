@@ -1,4 +1,4 @@
-use std::{convert::TryInto, io, time::Duration};
+use std::{convert::TryInto, io, ops::BitAnd, time::Duration};
 
 mod instruction;
 mod machine;
@@ -65,7 +65,7 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
 
 fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
-    for address in (0x2000..=0x2100).step_by(16) {
+    for address in (0x2200..=0x2400).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -89,6 +89,18 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
 }
 
 const SCALE: u32 = 3;
+
+fn palette_number(left: u8, right: u8, index: usize) -> u32 {
+    let is_left_on = left.bitand(1 << (7 - index)) != 0;
+    let is_right_on = right.bitand(1 << (7 - index)) != 0;
+
+    match (is_left_on, is_right_on) {
+        (false, false) => 0,
+        (true, false) => 1,
+        (false, true) => 2,
+        (true, true) => 3,
+    }
+}
 
 fn main() -> Result<(), String> {
     let mut machine = Machine::load(&String::from("hello.nes")).unwrap();
@@ -139,15 +151,17 @@ fn main() -> Result<(), String> {
                 for pattern_row in 0..8 {
                     let addr = pattern_table_address + pattern_row;
                     let bits = machine.get_video_buffer()[addr];
+                    let bits2 = machine.get_video_buffer()[addr + 8];
 
                     for pattern_col in 0..8 {
-                        let val = bits & (1 << (7 - pattern_col));
-                        let is_on = val != 0;
+                        let palette_value = palette_number(bits, bits2, pattern_col);
 
-                        let color = if is_on {
-                            sdl2::pixels::Color::RGB(255, 255, 255)
-                        } else {
-                            sdl2::pixels::Color::RGB(0, 0, 0)
+                        let color = match palette_value {
+                            0 => sdl2::pixels::Color::RGB(0, 0, 0),
+                            1 => sdl2::pixels::Color::RGB(0xff, 00, 00),
+                            2 => sdl2::pixels::Color::RGB(0, 0xff, 0),
+                            3 => sdl2::pixels::Color::RGB(0, 0, 0xff),
+                            _ => panic!("Impossible color palette: {}", palette_value),
                         };
 
                         let y = pattern_row + row * 8;
