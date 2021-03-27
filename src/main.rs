@@ -4,6 +4,10 @@ mod instruction;
 mod machine;
 
 use machine::{Machine, MemoryBuffer, VideoMemoryBuffer};
+use sdl2::{
+    pixels::{Palette, PixelFormat, PixelFormatEnum},
+    surface::Surface,
+};
 use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
@@ -156,7 +160,7 @@ const PALETTE: [(u8, u8, u8); 64] = [
     (0x11, 0x11, 0x11),
 ];
 
-fn palette_number(left: u8, right: u8, index: usize) -> u32 {
+fn palette_number(left: u8, right: u8, index: usize) -> u8 {
     let is_left_on = left.bitand(1 << (7 - index)) != 0;
     let is_right_on = right.bitand(1 << (7 - index)) != 0;
 
@@ -181,21 +185,22 @@ fn main() -> Result<(), String> {
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas().build().unwrap();
-
-    canvas.set_draw_color(sdl2::pixels::Color::RGB(0, 0, 0));
-    canvas.clear();
-    canvas.present();
-
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let stdout = io::stdout()
-        .into_raw_mode()
-        .map_err(|_| "Failed retrieving stdout")?;
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).map_err(|_| "Failed creating terminal")?;
+    // let stdout = io::stdout()
+    //     .into_raw_mode()
+    //     .map_err(|_| "Failed retrieving stdout")?;
+    // let backend = TermionBackend::new(stdout);
+    // let mut terminal = Terminal::new(backend).map_err(|_| "Failed creating terminal")?;
 
-    terminal.clear().unwrap();
+    // terminal.clear().unwrap();
+
+    // let texture_creator = canvas.texture_creator();
+    // let mut texture = texture_creator
+    //     .create_texture(None, sdl2::render::TextureAccess::Static, 256, 240)
+    //     .unwrap();
+
+    // texture.update(rect, pixel_data, pitch)
 
     'running: loop {
         machine.step();
@@ -207,26 +212,83 @@ fn main() -> Result<(), String> {
             }
         }
 
-        terminal
-            .draw(|f| {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(1)
-                    .constraints([Constraint::Percentage(100)].as_ref())
-                    .split(f.size());
+        // terminal
+        //     .draw(|f| {
+        //         let chunks = Layout::default()
+        //             .direction(Direction::Vertical)
+        //             .margin(1)
+        //             .constraints([Constraint::Percentage(100)].as_ref())
+        //             .split(f.size());
 
-                // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
-                f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
+        //         // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
+        //         f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
+        //     })
+        //     .map_err(|_| "Failed drawing terminal")?;
+
+        let video_buffer = machine.get_video_buffer();
+
+        let palette_set = (0..16)
+            .map(|index| {
+                let palette_index = if index % 4 == 0 {
+                    video_buffer[0x3f00]
+                } else {
+                    video_buffer[0x3f00 + index]
+                };
+
+                let (r, g, b) = PALETTE[palette_index as usize];
+
+                sdl2::pixels::Color::RGB(r, g, b)
             })
-            .map_err(|_| "Failed drawing terminal")?;
+            .collect::<Vec<_>>()
+            .chunks(4)
+            .map(|colors| Palette::with_colors(colors).unwrap())
+            .collect::<Vec<_>>();
+
+        let start_time = std::time::SystemTime::now();
+
+        let mut surfaces: Vec<_> = (0..256)
+            .map(|index| {
+                let mut surface =
+                    Surface::new(8, 8, sdl2::pixels::PixelFormatEnum::Index8).unwrap();
+
+                surface.set_palette(&palette_set[0]).unwrap();
+
+                let address = index * 0x10;
+
+                let raw_bytes = surface.without_lock_mut().unwrap();
+
+                for row in 0..8 {
+                    let left_bits = video_buffer[address + row];
+                    let right_bits = video_buffer[address + row + 8];
+
+                    for col in 0..8 {
+                        let palette_value = palette_number(left_bits, right_bits, col);
+
+                        raw_bytes[row * 8 + col] = palette_value;
+                    }
+                }
+
+                return surface;
+            })
+            .collect();
+
+        let duration = std::time::SystemTime::now()
+            .duration_since(start_time)
+            .unwrap();
+
+        println!("Tile generation duration: {:?}", duration);
+
+        let mut surface =
+            sdl2::surface::Surface::new(256, 240, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+
+        let start_time = std::time::SystemTime::now();
+        let mut window_surface = window.surface(&event_pump).unwrap();
 
         for row in 0..30 {
             for col in 0..32 {
                 let nametable_address = row * 32 + col + 0x2000;
 
                 let nametable_value = machine.get_video_buffer()[nametable_address];
-
-                let pattern_table_address = nametable_value as usize * 0x10;
 
                 let attribute_y = row / 4;
                 let attribute_x = col / 4;
@@ -242,7 +304,7 @@ fn main() -> Result<(), String> {
                 let subtile_y = row % 4;
                 let subtile_x = col % 4;
 
-                let palette_set = match (subtile_x / 2, subtile_y / 2) {
+                let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
                     (0, 0) => top_left,
                     (1, 0) => top_right,
                     (1, 1) => bottom_left,
@@ -250,60 +312,36 @@ fn main() -> Result<(), String> {
                     _ => panic!("Impossible subtile location!"),
                 };
 
-                for pattern_row in 0..8 {
-                    let addr = pattern_table_address + pattern_row;
-                    let bits = machine.get_video_buffer()[addr];
-                    let bits2 = machine.get_video_buffer()[addr + 8];
+                let pattern_surface = &mut surfaces[nametable_value as usize];
 
-                    for pattern_col in 0..8 {
-                        let palette_value = palette_number(bits, bits2, pattern_col);
-                        let palette_index = if palette_value == 0 {
-                            0
-                        } else {
-                            palette_set as u32 * 4 + palette_value
-                        };
+                let xx: i32 = col.try_into().unwrap();
+                let yy: i32 = row.try_into().unwrap();
 
-                        let color_index =
-                            machine.get_video_buffer()[0x3f00 + palette_index as usize];
+                pattern_surface
+                    .set_palette(&palette_set[palette_set_index as usize])
+                    .unwrap();
 
-                        if color_index as usize > PALETTE.len() {
-                            panic!(
-                                "color index {:#02x?}, requested at address {:#02x?}",
-                                color_index,
-                                0x3f00 + palette_index
-                            );
-                        }
-                        let (r, g, b) = PALETTE[color_index as usize];
-                        let color = sdl2::pixels::Color::RGB(r, g, b);
-                        // let color = match palette_value {
-                        //     0 => sdl2::pixels::Color::RGB(0, 0, 0),
-                        //     1 => sdl2::pixels::Color::RGB(0xff, 00, 00),
-                        //     2 => sdl2::pixels::Color::RGB(0, 0xff, 0),
-                        //     3 => sdl2::pixels::Color::RGB(0, 0, 0xff),
-                        //     _ => panic!("Impossible color palette: {}", palette_value),
-                        // };
-
-                        let y = pattern_row + row * 8;
-                        let x = pattern_col + col * 8;
-
-                        let xx: i32 = x.try_into().unwrap();
-                        let yy: i32 = y.try_into().unwrap();
-
-                        canvas.set_draw_color(color);
-                        canvas
-                            .fill_rect(sdl2::rect::Rect::new(
-                                xx * SCALE as i32,
-                                yy * SCALE as i32,
-                                SCALE,
-                                SCALE,
-                            ))
-                            .unwrap();
-                    }
-                }
+                pattern_surface
+                    .blit(
+                        pattern_surface.rect(),
+                        &mut surface,
+                        sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
+                    )
+                    .unwrap();
             }
         }
 
-        canvas.present();
+        let target_rect = window_surface.rect();
+        surface
+            .blit_scaled(surface.rect(), &mut window_surface, target_rect)
+            .unwrap();
+        window_surface.update_window().unwrap();
+
+        let duration = std::time::SystemTime::now()
+            .duration_since(start_time)
+            .unwrap();
+
+        println!("Render duration: {:?}", duration);
 
         // std::thread::sleep(Duration::from_millis(3));
     }
