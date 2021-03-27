@@ -1,4 +1,9 @@
-use std::{convert::TryInto, env, io, ops::BitAnd, time::Duration};
+use std::{
+    convert::TryInto,
+    env, io,
+    ops::{BitAnd, Mul},
+    time::Duration,
+};
 
 mod instruction;
 mod machine;
@@ -6,6 +11,7 @@ mod machine;
 use machine::{Machine, MemoryBuffer, VideoMemoryBuffer};
 use sdl2::{
     pixels::{Palette, PixelFormat, PixelFormatEnum},
+    render::Texture,
     surface::Surface,
 };
 use termion::raw::IntoRawMode;
@@ -186,6 +192,14 @@ fn main() -> Result<(), String> {
         .unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut canvas = window
+        .into_canvas()
+        .accelerated()
+        .target_texture()
+        .build()
+        .unwrap();
+
+    let texture_creator = canvas.texture_creator();
 
     // let stdout = io::stdout()
     //     .into_raw_mode()
@@ -227,7 +241,7 @@ fn main() -> Result<(), String> {
 
         let video_buffer = machine.get_video_buffer();
 
-        let palette_set = (0..16)
+        let color_set = (0..16)
             .map(|index| {
                 let palette_index = if index % 4 == 0 {
                     video_buffer[0x3f00]
@@ -239,38 +253,46 @@ fn main() -> Result<(), String> {
 
                 sdl2::pixels::Color::RGB(r, g, b)
             })
-            .collect::<Vec<_>>()
-            .chunks(4)
-            .map(|colors| Palette::with_colors(colors).unwrap())
             .collect::<Vec<_>>();
+
+        let palette_set = Palette::with_colors(&color_set).unwrap();
 
         let start_time = std::time::SystemTime::now();
 
-        let mut surfaces: Vec<_> = (0..256)
-            .map(|index| {
-                let mut surface =
-                    Surface::new(8, 8, sdl2::pixels::PixelFormatEnum::Index8).unwrap();
+        /*
+        Generate the pattern tiles.
+        The tiles are arranged vertically and also grouped in sets.
+        (0, 0) -> (7, 7): Tile 0 palette set 1
+        (0, 8) -> (7, 15): Tile 0 pallette set 1
+        (0, 2048) -> (7, 2055): Tile 0 pallette set 2
+        */
 
-                surface.set_palette(&palette_set[0]).unwrap();
+        let mut pattern_surface = Surface::new(8, 256 * 8 * 4, PixelFormatEnum::Index8).unwrap();
+        pattern_surface.set_palette(&palette_set).unwrap();
+        let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
 
-                let address = index * 0x10;
+        for index in 0..256 {
+            let address = index * 0x10;
 
-                let raw_bytes = surface.without_lock_mut().unwrap();
+            for row in 0..8 {
+                let left_bits = video_buffer[address + row];
+                let right_bits = video_buffer[address + row + 8];
 
-                for row in 0..8 {
-                    let left_bits = video_buffer[address + row];
-                    let right_bits = video_buffer[address + row + 8];
+                for col in 0..8 {
+                    let palette_value = palette_number(left_bits, right_bits, col);
 
-                    for col in 0..8 {
-                        let palette_value = palette_number(left_bits, right_bits, col);
-
-                        raw_bytes[row * 8 + col] = palette_value;
-                    }
+                    // fill each palette set
+                    pattern_surface_raw[row * 8 + col + index * 64] = palette_value;
+                    pattern_surface_raw[row * 8 + col + index * 64 + 2048 * 8] = palette_value + 4;
+                    pattern_surface_raw[row * 8 + col + index * 64 + 4096 * 8] = palette_value + 8;
+                    pattern_surface_raw[row * 8 + col + index * 64 + 6144 * 8] = palette_value + 12;
                 }
+            }
+        }
 
-                return surface;
-            })
-            .collect();
+        let mut pattern_texture = texture_creator
+            .create_texture_from_surface(pattern_surface)
+            .unwrap();
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
@@ -278,11 +300,8 @@ fn main() -> Result<(), String> {
 
         println!("Tile generation duration: {:?}", duration);
 
-        let mut surface =
-            sdl2::surface::Surface::new(256, 240, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-
         let start_time = std::time::SystemTime::now();
-        let mut window_surface = window.surface(&event_pump).unwrap();
+        // let mut window_surface = window.surface(&event_pump).unwrap();
 
         for row in 0..30 {
             for col in 0..32 {
@@ -312,30 +331,30 @@ fn main() -> Result<(), String> {
                     _ => panic!("Impossible subtile location!"),
                 };
 
-                let pattern_surface = &mut surfaces[nametable_value as usize];
-
                 let xx: i32 = col.try_into().unwrap();
                 let yy: i32 = row.try_into().unwrap();
 
-                pattern_surface
-                    .set_palette(&palette_set[palette_set_index as usize])
-                    .unwrap();
-
-                pattern_surface
-                    .blit(
-                        pattern_surface.rect(),
-                        &mut surface,
-                        sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
+                canvas
+                    .copy(
+                        &mut pattern_texture,
+                        sdl2::rect::Rect::new(
+                            0,
+                            nametable_value as i32 * 8 + 2048 * palette_set_index as i32,
+                            8,
+                            8,
+                        ),
+                        sdl2::rect::Rect::new(
+                            xx * 8 * SCALE as i32,
+                            yy * 8 * SCALE as i32,
+                            8 * SCALE,
+                            8 * SCALE,
+                        ),
                     )
                     .unwrap();
             }
         }
 
-        let target_rect = window_surface.rect();
-        surface
-            .blit_scaled(surface.rect(), &mut window_surface, target_rect)
-            .unwrap();
-        window_surface.update_window().unwrap();
+        canvas.present();
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
