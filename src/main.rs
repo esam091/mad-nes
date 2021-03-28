@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+mod cpu;
 mod instruction;
 mod machine;
 

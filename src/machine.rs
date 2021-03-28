@@ -1,5 +1,6 @@
 use std::u8;
 
+use crate::cpu::{self, Cpu};
 use crate::instruction::Instruction;
 
 pub type MemoryBuffer = [u8; 0x10000];
@@ -24,6 +25,8 @@ pub struct Machine {
     video_offset: u8,
 
     cycles: u32,
+
+    cpu: Cpu,
 }
 
 impl Machine {
@@ -59,137 +62,41 @@ impl Machine {
             video_offset: 0,
 
             cycles: 0,
+
+            cpu: Cpu::new(memory, initial_address),
         });
     }
 
-    fn get_byte_and_forward_pc(&mut self) -> u8 {
-        let value = self.memory[self.pc as usize];
-        self.pc += 1;
+    pub fn step(&mut self) -> Option<SideEffect> {
+        let result = self.cpu.step();
 
-        return value;
-    }
-
-    fn get_word_and_forward_pc(&mut self) -> u16 {
-        let byte1 = self.get_byte_and_forward_pc();
-        let byte2 = self.get_byte_and_forward_pc();
-
-        return u16::from_le_bytes([byte1, byte2]);
-    }
-
-    fn set_memory_value(&mut self, address: u16, value: u8) {
-        self.memory[address as usize] = value;
-
-        match address {
-            0x2006 => match (self.video_addr1, self.video_addr2) {
-                (None, None) => self.video_addr1 = Some(value),
-                (Some(_), None) => self.video_addr2 = Some(value),
-                (Some(_), Some(_)) => {
-                    self.video_addr1 = Some(value);
-                    self.video_addr2 = None;
-                    self.video_offset = 0;
+        match result.side_effect {
+            Some(cpu::SideEffect::WritePpuAddr(address)) => {
+                match (self.video_addr1, self.video_addr2) {
+                    (None, None) => self.video_addr1 = Some(address),
+                    (Some(_), None) => self.video_addr2 = Some(address),
+                    (Some(_), Some(_)) => {
+                        self.video_addr1 = Some(address);
+                        self.video_addr2 = None;
+                        self.video_offset = 0;
+                    }
+                    (None, Some(_)) => panic!("Unlikely 0x2006 condition"),
                 }
-                (None, Some(_)) => panic!("Unlikely 0x2006 condition"),
-            },
-
-            0x2007 => match (self.video_addr1, self.video_addr2) {
-                (Some(addr1), Some(addr2)) => {
-                    let address = u16::from_be_bytes([addr1, addr2]);
-                    self.video_memory[self.video_offset as usize + address as usize] = value;
-                    self.video_offset += 1;
+            }
+            Some(cpu::SideEffect::WritePpuData(value)) => {
+                match (self.video_addr1, self.video_addr2) {
+                    (Some(addr1), Some(addr2)) => {
+                        let address = u16::from_be_bytes([addr1, addr2]);
+                        self.video_memory[self.video_offset as usize + address as usize] = value;
+                        self.video_offset += 1;
+                    }
+                    _ => panic!("Video registry error"),
                 }
-                _ => panic!("Video registry error"),
-            },
+            }
             _ => {}
         }
-    }
 
-    pub fn step(&mut self) -> Option<SideEffect> {
-        let opcode = self.memory[self.pc as usize];
-        self.pc += 1;
-
-        // println!("opcode {:#02x?}", opcode);
-        // println!("pc {:#02x?}", self.pc);
-
-        let instruction: Instruction;
-        match opcode {
-            0xa9 => {
-                instruction = Instruction::LdaImmediate(self.get_byte_and_forward_pc());
-            }
-            0x8d => {
-                instruction = Instruction::StaAbsolute(self.get_word_and_forward_pc());
-            }
-            0xa2 => {
-                instruction = Instruction::LdxImmediate(self.get_byte_and_forward_pc());
-            }
-            0xbd => {
-                instruction = Instruction::LdaXAbsolute(self.get_word_and_forward_pc());
-            }
-            0xc9 => {
-                instruction = Instruction::CmpImmediate(self.get_byte_and_forward_pc());
-            }
-            0xf0 => {
-                instruction = Instruction::Beq(self.get_byte_and_forward_pc());
-            }
-            0xe8 => {
-                instruction = Instruction::Inx;
-            }
-            0x4c => {
-                instruction = Instruction::JmpAbsolute(self.get_word_and_forward_pc());
-            }
-            0xe0 => {
-                instruction = Instruction::CpxImmediate(self.get_byte_and_forward_pc());
-            }
-            0xd0 => {
-                instruction = Instruction::Bne(self.get_byte_and_forward_pc());
-            }
-            _ => {
-                panic!("Cannot parse opcode {:#02x?} at pc {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode, self.pc);
-            }
-        }
-
-        // println!("instruction: {:#04X?}", instruction);
-
-        match instruction {
-            Instruction::LdaImmediate(value) => {
-                self.a = value;
-            }
-            Instruction::StaAbsolute(address) => {
-                self.set_memory_value(address, self.a);
-            }
-            Instruction::LdxImmediate(value) => {
-                self.x = value;
-            }
-            Instruction::LdaXAbsolute(value) => {
-                self.a = self.memory[value as usize + self.x as usize];
-            }
-            Instruction::CmpImmediate(value) => {
-                let result = self.a.overflowing_sub(value);
-                self.zero_flag = result.0 == 0;
-            }
-            Instruction::Beq(value) => {
-                if self.zero_flag {
-                    self.pc += value as u16;
-                }
-            }
-            Instruction::Inx => {
-                self.x += 1;
-            }
-            Instruction::JmpAbsolute(address) => {
-                self.pc = address;
-            }
-            Instruction::CpxImmediate(value) => {
-                let result = self.x.overflowing_sub(value);
-                self.zero_flag = result.0 == 0;
-            }
-            Instruction::Bne(offset) => {
-                if !self.zero_flag {
-                    let a = self.pc as i16 + (offset as i8) as i16;
-                    self.pc = a as u16;
-                }
-            }
-        }
-
-        self.cycles += instruction.cycles();
+        self.cycles += result.cycles_elapsed;
 
         if self.cycles >= 3000 {
             self.cycles %= 3000;
