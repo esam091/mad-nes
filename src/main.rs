@@ -11,7 +11,7 @@ mod machine;
 use machine::{Machine, MemoryBuffer, VideoMemoryBuffer};
 use sdl2::{
     pixels::{Palette, PixelFormat, PixelFormatEnum},
-    render::Texture,
+    render::{Texture, TextureCreator},
     surface::Surface,
 };
 use termion::raw::IntoRawMode;
@@ -178,6 +178,50 @@ fn palette_number(left: u8, right: u8, index: usize) -> u8 {
     }
 }
 
+fn create_debug_texture<'a, 'b, T>(
+    texture_creator: &'b TextureCreator<T>,
+    pixel_format: PixelFormatEnum,
+) -> Texture<'a>
+where
+    'b: 'a,
+{
+    let mut surface = Surface::new(256, 240, pixel_format).unwrap();
+
+    // tile grid
+    let color = sdl2::pixels::Color::RGBA(0x80, 0x80, 0x80, 0x80);
+
+    for row in (8..240).step_by(8) {
+        surface
+            .fill_rect(sdl2::rect::Rect::new(0, row, 256, 1), color)
+            .unwrap();
+    }
+
+    for col in (8..256).step_by(8) {
+        surface
+            .fill_rect(sdl2::rect::Rect::new(col, 0, 1, 240), color)
+            .unwrap();
+    }
+
+    // attribute grid
+    let color = sdl2::pixels::Color::RGBA(0xff, 0xff, 0xff, 0x90);
+
+    for row in (16..240).step_by(16) {
+        surface
+            .fill_rect(sdl2::rect::Rect::new(0, row, 256, 1), color)
+            .unwrap();
+    }
+
+    for col in (16..256).step_by(16) {
+        surface
+            .fill_rect(sdl2::rect::Rect::new(col, 0, 1, 240), color)
+            .unwrap();
+    }
+
+    return texture_creator
+        .create_texture_from_surface(surface)
+        .unwrap();
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     let mut machine = Machine::load(&args[1]).unwrap();
@@ -215,6 +259,12 @@ fn main() -> Result<(), String> {
     //     .unwrap();
 
     // texture.update(rect, pixel_data, pitch)
+
+    let mut gameplay_texture = texture_creator
+        .create_texture_target(None, 256, 240)
+        .unwrap();
+
+    let debug_texture = create_debug_texture(&texture_creator, canvas.default_pixel_format());
 
     'running: loop {
         machine.step();
@@ -303,57 +353,59 @@ fn main() -> Result<(), String> {
         let start_time = std::time::SystemTime::now();
         // let mut window_surface = window.surface(&event_pump).unwrap();
 
-        for row in 0..30 {
-            for col in 0..32 {
-                let nametable_address = row * 32 + col + 0x2000;
+        canvas
+            .with_texture_canvas(&mut gameplay_texture, |canvas| {
+                for row in 0..30 {
+                    for col in 0..32 {
+                        let nametable_address = row * 32 + col + 0x2000;
 
-                let nametable_value = machine.get_video_buffer()[nametable_address];
+                        let nametable_value = machine.get_video_buffer()[nametable_address];
 
-                let attribute_y = row / 4;
-                let attribute_x = col / 4;
+                        let attribute_y = row / 4;
+                        let attribute_x = col / 4;
 
-                let attribute_value =
-                    machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
+                        let attribute_value =
+                            machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
 
-                let top_left = attribute_value & 0b11;
-                let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
+                        let top_left = attribute_value & 0b11;
+                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
+                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
+                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
 
-                let subtile_y = row % 4;
-                let subtile_x = col % 4;
+                        let subtile_y = row % 4;
+                        let subtile_x = col % 4;
 
-                let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                    (0, 0) => top_left,
-                    (1, 0) => top_right,
-                    (1, 1) => bottom_left,
-                    (0, 1) => bottom_right,
-                    _ => panic!("Impossible subtile location!"),
-                };
+                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
+                            (0, 0) => top_left,
+                            (1, 0) => top_right,
+                            (1, 1) => bottom_left,
+                            (0, 1) => bottom_right,
+                            _ => panic!("Impossible subtile location!"),
+                        };
 
-                let xx: i32 = col.try_into().unwrap();
-                let yy: i32 = row.try_into().unwrap();
+                        let xx: i32 = col.try_into().unwrap();
+                        let yy: i32 = row.try_into().unwrap();
 
-                canvas
-                    .copy(
-                        &mut pattern_texture,
-                        sdl2::rect::Rect::new(
-                            0,
-                            nametable_value as i32 * 8 + 2048 * palette_set_index as i32,
-                            8,
-                            8,
-                        ),
-                        sdl2::rect::Rect::new(
-                            xx * 8 * SCALE as i32,
-                            yy * 8 * SCALE as i32,
-                            8 * SCALE,
-                            8 * SCALE,
-                        ),
-                    )
-                    .unwrap();
-            }
-        }
+                        canvas
+                            .copy(
+                                &mut pattern_texture,
+                                sdl2::rect::Rect::new(
+                                    0,
+                                    nametable_value as i32 * 8 + 2048 * palette_set_index as i32,
+                                    8,
+                                    8,
+                                ),
+                                sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
+                            )
+                            .unwrap();
+                    }
+                }
 
+                canvas.copy(&debug_texture, None, None).unwrap();
+            })
+            .unwrap();
+
+        canvas.copy(&gameplay_texture, None, None).unwrap();
         canvas.present();
 
         let duration = std::time::SystemTime::now()
