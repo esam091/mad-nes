@@ -267,8 +267,6 @@ fn main() -> Result<(), String> {
     let debug_texture = create_debug_texture(&texture_creator, canvas.default_pixel_format());
 
     'running: loop {
-        machine.step();
-
         for event in event_pump.poll_iter() {
             match event {
                 sdl2::event::Event::Quit { .. } => break 'running,
@@ -289,132 +287,141 @@ fn main() -> Result<(), String> {
         //     })
         //     .map_err(|_| "Failed drawing terminal")?;
 
-        let video_buffer = machine.get_video_buffer();
+        let side_effect = machine.step();
 
-        let color_set = (0..16)
-            .map(|index| {
-                let palette_index = if index % 4 == 0 {
-                    video_buffer[0x3f00]
-                } else {
-                    video_buffer[0x3f00 + index]
-                };
+        if let Some(side_effect) = side_effect {
+            let video_buffer = machine.get_video_buffer();
 
-                let (r, g, b) = PALETTE[palette_index as usize];
+            let color_set = (0..16)
+                .map(|index| {
+                    let palette_index = if index % 4 == 0 {
+                        video_buffer[0x3f00]
+                    } else {
+                        video_buffer[0x3f00 + index]
+                    };
 
-                sdl2::pixels::Color::RGB(r, g, b)
-            })
-            .collect::<Vec<_>>();
+                    let (r, g, b) = PALETTE[palette_index as usize];
 
-        let palette_set = Palette::with_colors(&color_set).unwrap();
+                    sdl2::pixels::Color::RGB(r, g, b)
+                })
+                .collect::<Vec<_>>();
 
-        let start_time = std::time::SystemTime::now();
+            let palette_set = Palette::with_colors(&color_set).unwrap();
 
-        /*
-        Generate the pattern tiles.
-        The tiles are arranged vertically and also grouped in sets.
-        (0, 0) -> (7, 7): Tile 0 palette set 1
-        (0, 8) -> (7, 15): Tile 0 pallette set 1
-        (0, 2048) -> (7, 2055): Tile 0 pallette set 2
-        */
+            let start_time = std::time::SystemTime::now();
 
-        let mut pattern_surface = Surface::new(8, 256 * 8 * 4, PixelFormatEnum::Index8).unwrap();
-        pattern_surface.set_palette(&palette_set).unwrap();
-        let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
+            /*
+            Generate the pattern tiles.
+            The tiles are arranged vertically and also grouped in sets.
+            (0, 0) -> (7, 7): Tile 0 palette set 1
+            (0, 8) -> (7, 15): Tile 0 pallette set 1
+            (0, 2048) -> (7, 2055): Tile 0 pallette set 2
+            */
 
-        for index in 0..256 {
-            let address = index * 0x10;
+            let mut pattern_surface =
+                Surface::new(8, 256 * 8 * 4, PixelFormatEnum::Index8).unwrap();
+            pattern_surface.set_palette(&palette_set).unwrap();
+            let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
 
-            for row in 0..8 {
-                let left_bits = video_buffer[address + row];
-                let right_bits = video_buffer[address + row + 8];
+            for index in 0..256 {
+                let address = index * 0x10;
 
-                for col in 0..8 {
-                    let palette_value = palette_number(left_bits, right_bits, col);
+                for row in 0..8 {
+                    let left_bits = video_buffer[address + row];
+                    let right_bits = video_buffer[address + row + 8];
 
-                    // fill each palette set
-                    pattern_surface_raw[row * 8 + col + index * 64] = palette_value;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 2048 * 8] = palette_value + 4;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 4096 * 8] = palette_value + 8;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 6144 * 8] = palette_value + 12;
-                }
-            }
-        }
+                    for col in 0..8 {
+                        let palette_value = palette_number(left_bits, right_bits, col);
 
-        let mut pattern_texture = texture_creator
-            .create_texture_from_surface(pattern_surface)
-            .unwrap();
-
-        let duration = std::time::SystemTime::now()
-            .duration_since(start_time)
-            .unwrap();
-
-        println!("Tile generation duration: {:?}", duration);
-
-        let start_time = std::time::SystemTime::now();
-        // let mut window_surface = window.surface(&event_pump).unwrap();
-
-        canvas
-            .with_texture_canvas(&mut gameplay_texture, |canvas| {
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + 0x2000;
-
-                        let nametable_value = machine.get_video_buffer()[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (1, 1) => bottom_left,
-                            (0, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        canvas
-                            .copy(
-                                &mut pattern_texture,
-                                sdl2::rect::Rect::new(
-                                    0,
-                                    nametable_value as i32 * 8 + 2048 * palette_set_index as i32,
-                                    8,
-                                    8,
-                                ),
-                                sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
-                            )
-                            .unwrap();
+                        // fill each palette set
+                        pattern_surface_raw[row * 8 + col + index * 64] = palette_value;
+                        pattern_surface_raw[row * 8 + col + index * 64 + 2048 * 8] =
+                            palette_value + 4;
+                        pattern_surface_raw[row * 8 + col + index * 64 + 4096 * 8] =
+                            palette_value + 8;
+                        pattern_surface_raw[row * 8 + col + index * 64 + 6144 * 8] =
+                            palette_value + 12;
                     }
                 }
+            }
 
-                canvas.copy(&debug_texture, None, None).unwrap();
-            })
-            .unwrap();
+            let mut pattern_texture = texture_creator
+                .create_texture_from_surface(pattern_surface)
+                .unwrap();
 
-        canvas.copy(&gameplay_texture, None, None).unwrap();
-        canvas.present();
+            let duration = std::time::SystemTime::now()
+                .duration_since(start_time)
+                .unwrap();
 
-        let duration = std::time::SystemTime::now()
-            .duration_since(start_time)
-            .unwrap();
+            println!("Tile generation duration: {:?}", duration);
 
-        println!("Render duration: {:?}", duration);
+            let start_time = std::time::SystemTime::now();
+            // let mut window_surface = window.surface(&event_pump).unwrap();
 
-        // std::thread::sleep(Duration::from_millis(3));
+            canvas
+                .with_texture_canvas(&mut gameplay_texture, |canvas| {
+                    for row in 0..30 {
+                        for col in 0..32 {
+                            let nametable_address = row * 32 + col + 0x2000;
+
+                            let nametable_value = machine.get_video_buffer()[nametable_address];
+
+                            let attribute_y = row / 4;
+                            let attribute_x = col / 4;
+
+                            let attribute_value =
+                                machine.get_video_buffer()[0x23c0 + attribute_x + attribute_y * 8];
+
+                            let top_left = attribute_value & 0b11;
+                            let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
+                            let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
+                            let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
+
+                            let subtile_y = row % 4;
+                            let subtile_x = col % 4;
+
+                            let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
+                                (0, 0) => top_left,
+                                (1, 0) => top_right,
+                                (1, 1) => bottom_left,
+                                (0, 1) => bottom_right,
+                                _ => panic!("Impossible subtile location!"),
+                            };
+
+                            let xx: i32 = col.try_into().unwrap();
+                            let yy: i32 = row.try_into().unwrap();
+
+                            canvas
+                                .copy(
+                                    &mut pattern_texture,
+                                    sdl2::rect::Rect::new(
+                                        0,
+                                        nametable_value as i32 * 8
+                                            + 2048 * palette_set_index as i32,
+                                        8,
+                                        8,
+                                    ),
+                                    sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
+                                )
+                                .unwrap();
+                        }
+                    }
+
+                    canvas.copy(&debug_texture, None, None).unwrap();
+                })
+                .unwrap();
+
+            canvas.copy(&gameplay_texture, None, None).unwrap();
+            canvas.present();
+
+            let duration = std::time::SystemTime::now()
+                .duration_since(start_time)
+                .unwrap();
+
+            println!("Render duration: {:?}", duration);
+
+            // std::thread::sleep(Duration::from_millis(3));
+        }
     }
 
     Ok(())

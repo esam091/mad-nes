@@ -5,6 +5,10 @@ use crate::instruction::Instruction;
 pub type MemoryBuffer = [u8; 0x10000];
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
+pub enum SideEffect {
+    Render,
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Machine {
     memory: MemoryBuffer,
@@ -18,6 +22,8 @@ pub struct Machine {
     video_addr1: Option<u8>,
     video_addr2: Option<u8>,
     video_offset: u8,
+
+    cycles: u32,
 }
 
 impl Machine {
@@ -51,6 +57,8 @@ impl Machine {
             video_addr1: None,
             video_addr2: None,
             video_offset: 0,
+
+            cycles: 0,
         });
     }
 
@@ -95,7 +103,7 @@ impl Machine {
         }
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> Option<SideEffect> {
         let opcode = self.memory[self.pc as usize];
         self.pc += 1;
 
@@ -180,6 +188,16 @@ impl Machine {
                 }
             }
         }
+
+        self.cycles += instruction.cycles();
+
+        if self.cycles >= 3000 {
+            self.cycles %= 3000;
+
+            return Some(SideEffect::Render);
+        }
+
+        None
     }
 
     pub fn get_buffer(&self) -> &MemoryBuffer {
