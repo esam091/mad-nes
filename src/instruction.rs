@@ -15,7 +15,17 @@ pub enum Instruction {
 impl Instruction {
     pub fn cycles(&self) -> u32 {
         match self {
-            _ => 5,
+            Instruction::LdaImmediate(_)
+            | Instruction::LdxImmediate(_)
+            | Instruction::CmpImmediate(_)
+            | Instruction::CpxImmediate(_)
+            | Instruction::Beq(_)
+            | Instruction::Bne(_)
+            | Instruction::Inx => 2,
+
+            Instruction::StaAbsolute(_) | Instruction::LdaXAbsolute(_) => 4,
+
+            Instruction::JmpAbsolute(_) => 5,
         }
     }
 }
