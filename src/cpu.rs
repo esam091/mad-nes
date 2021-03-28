@@ -167,12 +167,3 @@ impl Cpu {
         }
     }
 }
-
-impl Into<CpuResult> for u32 {
-    fn into(self) -> CpuResult {
-        CpuResult {
-            cycles_elapsed: self,
-            side_effect: None,
-        }
-    }
-}
