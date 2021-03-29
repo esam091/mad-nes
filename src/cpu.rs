@@ -97,6 +97,7 @@ impl Cpu {
                 }
                 cycles(2)
             }
+            _ => todo!("interpret instructions"),
         }
     }
 
