@@ -40,63 +40,8 @@ impl Cpu {
         }
     }
 
-    fn get_byte_and_forward_pc(&mut self) -> u8 {
-        let value = self.memory[self.pc as usize];
-        self.pc += 1;
-
-        return value;
-    }
-
-    fn get_word_and_forward_pc(&mut self) -> u16 {
-        let byte1 = self.get_byte_and_forward_pc();
-        let byte2 = self.get_byte_and_forward_pc();
-
-        return u16::from_le_bytes([byte1, byte2]);
-    }
-
     pub fn step(&mut self) -> CpuResult {
-        let opcode = self.memory[self.pc as usize];
-        self.pc += 1;
-
-        // println!("opcode {:#02x?}", opcode);
-        // println!("pc {:#02x?}", self.pc);
-
-        let instruction: Instruction;
-        match opcode {
-            0xa9 => {
-                instruction = Instruction::LdaImmediate(self.get_byte_and_forward_pc());
-            }
-            0x8d => {
-                instruction = Instruction::StaAbsolute(self.get_word_and_forward_pc());
-            }
-            0xa2 => {
-                instruction = Instruction::LdxImmediate(self.get_byte_and_forward_pc());
-            }
-            0xbd => {
-                instruction = Instruction::LdaXAbsolute(self.get_word_and_forward_pc());
-            }
-            0xc9 => {
-                instruction = Instruction::CmpImmediate(self.get_byte_and_forward_pc());
-            }
-            0xf0 => {
-                instruction = Instruction::Beq(self.get_byte_and_forward_pc());
-            }
-            0xe8 => {
-                instruction = Instruction::Inx;
-            }
-            0x4c => {
-                instruction = Instruction::JmpAbsolute(self.get_word_and_forward_pc());
-            }
-            0xe0 => {
-                instruction = Instruction::CpxImmediate(self.get_byte_and_forward_pc());
-            }
-            0xd0 => {
-                instruction = Instruction::Bne(self.get_byte_and_forward_pc());
-            }
-            _ => {
-                panic!("Cannot parse opcode {:#02x?} at pc {:#02x?}, either it is not implemented yet, or you reached data section by mistake", opcode, self.pc);
-            }
-        }
+        let instruction = Instruction::from_bytes(self);
 
         match instruction {
             Instruction::LdaImmediate(value) => {
@@ -165,5 +110,16 @@ impl Cpu {
 
             zero_flag: false,
         }
+    }
+}
+
+impl Iterator for Cpu {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let value = self.memory[self.pc as usize];
+        self.pc += 1;
+
+        return Some(value);
     }
 }
