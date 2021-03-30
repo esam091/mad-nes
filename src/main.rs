@@ -6,6 +6,7 @@ use std::{
 };
 
 mod cpu;
+mod ines;
 mod instruction;
 mod machine;
 

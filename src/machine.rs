@@ -1,7 +1,7 @@
 use std::u8;
 
 use crate::cpu::{self, Cpu};
-use crate::instruction::Instruction;
+use crate::ines::InesRom;
 
 pub type MemoryBuffer = [u8; 0x10000];
 pub type VideoMemoryBuffer = [u8; 0x4000];
@@ -31,19 +31,15 @@ pub struct Machine {
 
 impl Machine {
     pub fn load(file_path: &String) -> Result<Machine, std::io::Error> {
-        // since we're using a legit hello world ROM as a prototype, we don't need to configure stuff from headers
-        let bytes: Vec<u8> = std::fs::read(file_path)?.into_iter().skip(16).collect();
+        // todo: fix error type
+        let rom = InesRom::load(file_path).ok().unwrap();
 
         let mut memory = [0 as u8; 0x10000];
+        memory[0x8000..0x8000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
 
-        for i in 0..bytes.len() - 16 {
-            memory[0x8000 + i] = bytes[i];
-        }
+        let vector_positions = rom.prg_rom_data().len() - 6;
 
-        // Copy the reset vector data
-        // The data was located at 400c but we subtract by 0x10 since we skipped 16 bytes in the header
-        memory[0xfffc] = bytes[0x3ffc];
-        memory[0xfffd] = bytes[0x3ffd];
+        memory[0xfffa..].copy_from_slice(&rom.prg_rom_data()[vector_positions..]);
 
         // jump to reset vector
         let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
