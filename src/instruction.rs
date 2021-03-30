@@ -96,7 +96,7 @@ pub enum Instruction {
 
     JmpAbsolute(u16),
     JmpIndirect(u16),
-    Jsr,
+    JsrAbsolute(u16),
 
     Nop,
 
@@ -215,7 +215,7 @@ impl Instruction {
             0x1d => Instruction::OraXAbsolute(next_word(iter)),
             0x1e => Instruction::AslXAbsolute(next_word(iter)),
 
-            0x20 => Instruction::Jsr,
+            0x20 => Instruction::JsrAbsolute(next_word(iter)),
             0x21 => Instruction::AndXIndexedIndirect(next_byte(iter)),
             0x24 => Instruction::BitZeroPage(next_byte(iter)),
             0x25 => Instruction::AndZeroPage(next_byte(iter)),
@@ -398,7 +398,7 @@ mod tests {
             (vec![0x00], Instruction::Brk),
             (vec![0x40], Instruction::Rti),
             (vec![0x60], Instruction::Rts),
-            (vec![0x20], Instruction::Jsr),
+            (vec![0x20, 0xbb, 0xdd], Instruction::JsrAbsolute(0xddbb)),
             (vec![0x6c, 0xaa, 0xff], Instruction::JmpIndirect(0xffaa)),
             (vec![0x2c, 0x78, 0x90], Instruction::BitAbsolute(0x9078)),
             (vec![0x24, 0x38], Instruction::BitZeroPage(0x38)),
