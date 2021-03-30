@@ -112,6 +112,10 @@ impl Cpu {
             zero_flag: false,
         }
     }
+
+    pub fn get_memory_buffer(&self) -> &MemoryBuffer {
+        &self.memory
+    }
 }
 
 impl Iterator for Cpu {

@@ -1,9 +1,8 @@
 use std::u8;
 
-use crate::cpu::{self, Cpu};
+use crate::cpu::{self, Cpu, MemoryBuffer};
 use crate::ines::InesRom;
 
-pub type MemoryBuffer = [u8; 0x10000];
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
 pub enum SideEffect {
@@ -12,13 +11,6 @@ pub enum SideEffect {
 
 #[derive(PartialEq, Eq)]
 pub struct Machine {
-    memory: MemoryBuffer,
-    pc: u16,
-    a: u8,
-    x: u8,
-
-    zero_flag: bool,
-
     video_memory: VideoMemoryBuffer,
     video_addr1: Option<u8>,
     video_addr2: Option<u8>,
@@ -45,13 +37,6 @@ impl Machine {
         let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
 
         return Ok(Machine {
-            memory: memory,
-            pc: initial_address,
-            a: 0,
-            x: 0,
-
-            zero_flag: false,
-
             video_memory: [0; 0x4000],
             video_addr1: None,
             video_addr2: None,
@@ -104,7 +89,7 @@ impl Machine {
     }
 
     pub fn get_buffer(&self) -> &MemoryBuffer {
-        &self.memory
+        &self.cpu.get_memory_buffer()
     }
 
     pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {

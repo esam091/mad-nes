@@ -10,7 +10,8 @@ mod ines;
 mod instruction;
 mod machine;
 
-use machine::{Machine, MemoryBuffer, VideoMemoryBuffer};
+use cpu::MemoryBuffer;
+use machine::{Machine, VideoMemoryBuffer};
 use sdl2::{
     pixels::{Palette, PixelFormat, PixelFormatEnum},
     render::{Texture, TextureCreator},
