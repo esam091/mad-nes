@@ -46,7 +46,15 @@ impl Cpu {
     }
 
     pub fn step(&mut self) -> CpuResult {
-        let instruction = Instruction::from_bytes(self);
+        let instruction = Instruction::from_bytes(self)
+            .map_err(|opcode| {
+                format!(
+                    "Failed parsing opcode: {:#02X?} at pc: {:02X?}",
+                    opcode,
+                    self.pc - 1
+                )
+            })
+            .unwrap();
 
         match instruction {
             Instruction::LdaImmediate(value) => {
