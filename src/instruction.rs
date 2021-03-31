@@ -27,6 +27,8 @@ pub enum Instruction {
     Bpl(u8),
     Bvc(u8),
     Bvs(u8),
+    Bcc(u8),
+    Bcs(u8),
 
     Clc,
     Cld,
@@ -285,6 +287,7 @@ impl Instruction {
             0x8c => Ok(Instruction::StyAbsolute(next_word(iter))),
             0x8d => Ok(Instruction::StaAbsolute(next_word(iter))),
             0x8e => Ok(Instruction::StxAbsolute(next_word(iter))),
+            0x90 => Ok(Instruction::Bcc(next_byte(iter))),
             0x91 => Ok(Instruction::StaYIndirectIndexed(next_byte(iter))),
             0x94 => Ok(Instruction::StyXZeroPage(next_byte(iter))),
             0x95 => Ok(Instruction::StaXZeroPage(next_byte(iter))),
@@ -307,6 +310,7 @@ impl Instruction {
             0xad => Ok(Instruction::LdaAbsolute(next_word(iter))),
             0xae => Ok(Instruction::LdxAbsolute(next_word(iter))),
 
+            0xb0 => Ok(Instruction::Bcs(next_byte(iter))),
             0xb1 => Ok(Instruction::LdaYIndirectIndexed(next_byte(iter))),
             0xb4 => Ok(Instruction::LdyXZeroPage(next_byte(iter))),
             0xb5 => Ok(Instruction::LdaXZeroPage(next_byte(iter))),
@@ -522,6 +526,8 @@ mod tests {
             (vec![0x0d, 0xd2, 0xf3], Instruction::OraAbsolute(0xf3d2)),
             (vec![0x1d, 0x82, 0xc3], Instruction::OraXAbsolute(0xc382)),
             (vec![0x19, 0x22, 0x99], Instruction::OraYAbsolute(0x9922)),
+            (vec![0xb0, 0x04], Instruction::Bcs(0x04)),
+            (vec![0x90, 0xc0], Instruction::Bcc(0xc0)),
         ];
 
         for (opcodes, instruction) in pairs {

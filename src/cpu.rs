@@ -1,4 +1,4 @@
-use std::ops::BitAndAssign;
+use std::ops::{BitAnd, BitAndAssign, BitOr};
 
 use crate::{ines::InesRom, instruction::Instruction};
 
@@ -29,8 +29,6 @@ pub struct Cpu {
     y: u8,
     p: u8,
     sp: u8,
-
-    zero_flag: bool,
 }
 
 impl Cpu {
@@ -57,10 +55,61 @@ impl Cpu {
             .unwrap();
 
         match instruction {
-            Instruction::LdaImmediate(value) => {
-                self.a = value;
+            Instruction::AndImmediate(value) => {
+                self.a &= value;
+                self.toggle_zero_negative_flag(self.a);
                 cycles(2)
             }
+
+            Instruction::OraImmediate(value) => {
+                self.a |= value;
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
+            }
+
+            Instruction::EorImmediate(value) => {
+                self.a ^= value;
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
+            }
+
+            Instruction::AdcImmediate(value) => {
+                let (result, carry) = self
+                    .a
+                    .overflowing_add(value + self.is_carry_flag_on() as u8); // maybe we should check for second carry?
+                let (_, overflow) = (self.a as i8).overflowing_add(value as i8); // also check for overflow with carry?
+
+                self.a = result;
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(carry);
+                self.set_overflow_flag(overflow);
+
+                cycles(2)
+            }
+
+            Instruction::SbcImmediate(value) => {
+                let (result, not_carry) = self
+                    .a
+                    .overflowing_sub(value + !self.is_carry_flag_on() as u8);
+
+                let (_, overflow) =
+                    (self.a as i8).overflowing_sub(value as i8 + !self.is_carry_flag_on() as i8); // also need to check for edge cases
+
+                self.a = result;
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(!not_carry);
+                self.set_overflow_flag(overflow);
+
+                cycles(2)
+            }
+
+            Instruction::LdaImmediate(value) => {
+                self.a = value;
+
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
+            }
+
             Instruction::StaAbsolute(address) => {
                 let side_effect = self.set_memory_value(address, self.a);
 
@@ -69,53 +118,85 @@ impl Cpu {
                     side_effect,
                 }
             }
+
             Instruction::LdxImmediate(value) => {
                 self.x = value;
-                self.set_zero_flag(value == 0);
+                self.toggle_zero_negative_flag(self.x);
 
                 cycles(2)
             }
+
+            Instruction::LdyImmediate(value) => {
+                self.y = value;
+                self.toggle_zero_negative_flag(self.y);
+
+                cycles(2)
+            }
+
             Instruction::LdaXAbsolute(value) => {
                 self.a = self.memory[value as usize + self.x as usize];
+
+                self.toggle_zero_negative_flag(self.a);
                 cycles(2)
             }
+
             Instruction::CmpImmediate(value) => {
-                let result = self.a.overflowing_sub(value);
-                self.zero_flag = result.0 == 0;
+                let (value, overflow) = self.a.overflowing_sub(value);
+                self.set_zero_flag(value == 0);
+                self.set_negative_flag(value & 0x80 != 0);
+                self.set_carry_flag(!overflow);
 
                 cycles(2)
             }
-            Instruction::Beq(value) => {
-                if self.zero_flag {
-                    self.pc += value as u16;
-                }
 
-                cycles(2)
-            }
+            Instruction::Beq(offset) => self.jump_if(self.is_zero_flag_on(), offset),
+
             Instruction::Inx => {
-                self.x += 1;
+                self.x = self.x.overflowing_add(1).0;
+                self.toggle_zero_negative_flag(self.x);
                 cycles(2)
             }
+
+            Instruction::Iny => {
+                self.y = self.y.overflowing_add(1).0;
+                self.toggle_zero_negative_flag(self.y);
+                cycles(2)
+            }
+
             Instruction::JmpAbsolute(address) => {
                 self.pc = address;
                 cycles(3)
             }
+
             Instruction::CpxImmediate(value) => {
-                let result = self.x.overflowing_sub(value);
-                self.zero_flag = result.0 == 0;
+                let (value, overflow) = self.x.overflowing_sub(value);
+
+                self.toggle_zero_negative_flag(value);
+                self.set_carry_flag(!overflow);
                 cycles(2)
             }
-            Instruction::Bne(offset) => {
-                if !self.zero_flag {
-                    let a = self.pc as i16 + (offset as i8) as i16;
-                    self.pc = a as u16;
-                }
+
+            Instruction::CpyImmediate(value) => {
+                let (value, overflow) = self.y.overflowing_sub(value);
+
+                self.toggle_zero_negative_flag(value);
+                self.set_carry_flag(!overflow);
                 cycles(2)
             }
+
+            Instruction::Bne(offset) => self.jump_if(!self.is_zero_flag_on(), offset),
 
             Instruction::Brk => {
                 self.set_break_flag(true);
                 cycles(7)
+            }
+
+            Instruction::StaZeroPage(address) => {
+                let side_effect = self.set_memory_value(address as u16, self.a);
+                CpuResult {
+                    cycles_elapsed: 3,
+                    side_effect,
+                }
             }
 
             Instruction::StxZeroPage(address) => {
@@ -128,10 +209,19 @@ impl Cpu {
 
             Instruction::JsrAbsolute(address) => {
                 let bytes = self.pc.to_le_bytes();
-                self.memory[self.sp as usize] = bytes[0];
-                self.memory[(self.sp - 1) as usize] = bytes[1];
+                self.push(bytes[1]);
+                self.push(bytes[0]);
 
-                self.sp -= 2;
+                self.pc = address;
+                cycles(6)
+            }
+
+            Instruction::Rts => {
+                let low_byte = self.pop();
+                let high_byte = self.pop();
+
+                let address = u16::from_le_bytes([low_byte, high_byte]);
+
                 self.pc = address;
                 cycles(6)
             }
@@ -142,16 +232,121 @@ impl Cpu {
                 self.set_carry_flag(true);
                 cycles(2)
             }
-            _ => todo!("interpret instructions: {:?}", instruction),
+
+            Instruction::Clc => {
+                self.set_carry_flag(false);
+                cycles(2)
+            }
+
+            Instruction::Clv => {
+                self.set_overflow_flag(false);
+                cycles(2)
+            }
+
+            Instruction::Bcs(offset) => self.jump_if(self.is_carry_flag_on(), offset),
+
+            Instruction::Bcc(offset) => self.jump_if(!self.is_carry_flag_on(), offset),
+
+            Instruction::BitZeroPage(address) => {
+                let value = self.memory[address as usize];
+
+                self.set_negative_flag(value & 0x80 != 0);
+                self.set_overflow_flag(value & 0x40 != 0);
+                self.set_zero_flag((value & self.a) == 0);
+                cycles(3)
+            }
+
+            Instruction::Bvs(offset) => self.jump_if(self.is_overflow_flag_on(), offset),
+
+            Instruction::Bvc(offset) => self.jump_if(!self.is_overflow_flag_on(), offset),
+
+            Instruction::Bpl(offset) => self.jump_if(!self.is_negative_flag_on(), offset),
+
+            Instruction::Bmi(offset) => self.jump_if(self.is_negative_flag_on(), offset),
+
+            Instruction::Sei => {
+                self.set_interrupt_flag(true);
+                cycles(2)
+            }
+
+            Instruction::Cld => {
+                self.set_decimal_flag(false);
+                cycles(2)
+            }
+
+            Instruction::Sed => {
+                self.set_decimal_flag(true);
+                cycles(2)
+            }
+
+            Instruction::Php => {
+                self.sp -= 1;
+
+                let side_effect = self.set_memory_value(self.sp as u16, self.p.bitor(0x10));
+                CpuResult {
+                    cycles_elapsed: 3,
+                    side_effect,
+                }
+            }
+
+            Instruction::Pha => {
+                self.sp -= 1;
+
+                let side_effect = self.set_memory_value(self.sp as u16, self.a);
+                CpuResult {
+                    cycles_elapsed: 3,
+                    side_effect,
+                }
+            }
+
+            Instruction::Pla => {
+                self.a = self.memory[self.sp as usize];
+                self.sp += 1;
+
+                self.toggle_zero_negative_flag(self.a);
+
+                cycles(4)
+            }
+
+            Instruction::Plp => {
+                self.p = self.memory[self.sp as usize]
+                    .bitand(!(1 << 4))
+                    .bitor(1 << 5); // this bit is always on
+                self.sp += 1;
+
+                cycles(4)
+            }
+
+            _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
 
-    fn set_zero_flag(&mut self, is_on: bool) {
-        if is_on {
-            self.p |= 2;
-        } else {
-            self.p &= !((is_on as u8) << 1);
+    fn jump_if(&mut self, condition: bool, offset: u8) -> CpuResult {
+        if condition {
+            let new_address = self.pc as i16 + (offset as i8) as i16;
+            self.pc = new_address as u16;
+            return cycles(3);
         }
+
+        return cycles(2);
+    }
+
+    fn push(&mut self, value: u8) {
+        self.memory[self.sp as usize] = value;
+        self.sp -= 1;
+    }
+
+    fn pop(&mut self) -> u8 {
+        self.sp += 1;
+        self.memory[self.sp as usize]
+    }
+
+    fn set_negative_flag(&mut self, is_on: bool) {
+        self.set_p_flag(7, is_on);
+    }
+
+    fn set_zero_flag(&mut self, is_on: bool) {
+        self.set_p_flag(1, is_on);
     }
 
     fn set_break_flag(&mut self, is_on: bool) {
@@ -159,11 +354,49 @@ impl Cpu {
     }
 
     fn set_carry_flag(&mut self, is_on: bool) {
+        self.set_p_flag(0, is_on);
+    }
+
+    fn set_overflow_flag(&mut self, is_on: bool) {
+        self.set_p_flag(6, is_on);
+    }
+
+    fn set_decimal_flag(&mut self, is_on: bool) {
+        self.set_p_flag(3, is_on);
+    }
+
+    fn set_p_flag(&mut self, bit_offset: u8, is_on: bool) {
+        let byte = 1 << bit_offset;
         if is_on {
-            self.p |= 1;
+            self.p |= byte;
         } else {
-            self.p &= !(is_on as u8);
+            self.p &= !byte;
         }
+    }
+
+    fn set_interrupt_flag(&mut self, is_on: bool) {
+        self.set_p_flag(2, is_on);
+    }
+
+    fn is_overflow_flag_on(&self) -> bool {
+        self.p.bitand(1 << 6) != 0
+    }
+
+    fn is_negative_flag_on(&self) -> bool {
+        self.p.bitand(1 << 7) != 0
+    }
+
+    fn is_carry_flag_on(&self) -> bool {
+        self.p.bitand(1) != 0
+    }
+
+    fn is_zero_flag_on(&self) -> bool {
+        self.p.bitand(2) != 0
+    }
+
+    fn toggle_zero_negative_flag(&mut self, value: u8) {
+        self.set_negative_flag(value & 0x80 != 0);
+        self.set_zero_flag(value == 0);
     }
 
     pub fn new(memory: MemoryBuffer, starting_address: u16) -> Cpu {
@@ -175,8 +408,6 @@ impl Cpu {
             y: 0,
             p: 0x24,
             sp: 0xfd,
-
-            zero_flag: false,
         }
     }
 
