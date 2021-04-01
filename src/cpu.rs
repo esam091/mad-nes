@@ -979,6 +979,16 @@ impl Cpu {
                 cycles(4)
             }
 
+            // illegal instructions
+            Instruction::Nop2 | Instruction::NopImmediate(_) => cycles(2),
+            Instruction::NopZeroPage(_) => cycles(3),
+            Instruction::NopXZeroPage(_) => cycles(4),
+            Instruction::NopAbsolute(_) => cycles(4),
+            Instruction::NopXAbsolute(address) => {
+                let (_, carry) = self.absolute_address(address, self.x);
+                cycles(4 + carry as u32)
+            }
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
@@ -1273,7 +1283,7 @@ mod test {
     use super::*;
     use crate::ines::InesRom;
 
-    // #[test]
+    #[test]
     fn nestest() {
         let text = std::fs::read_to_string("nestest.log").unwrap();
         let lines = text.lines();
