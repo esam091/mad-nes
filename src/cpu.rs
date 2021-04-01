@@ -103,6 +103,12 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::SbcXIndexedIndirect(index) => {
+                self.sbc(self.indexed_indirect_value(index));
+
+                cycles(6)
+            }
+
             Instruction::CmpImmediate(value) => {
                 self.compare(value);
 
