@@ -195,6 +195,20 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::LdyZeroPage(address) => {
+                self.y = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.y);
+
+                cycles(3)
+            }
+
+            Instruction::LdxZeroPage(address) => {
+                self.x = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.x);
+
+                cycles(3)
+            }
+
             Instruction::LdaAbsolute(address) => {
                 self.a = self.memory[address as usize];
                 self.toggle_zero_negative_flag(self.a);
