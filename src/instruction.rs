@@ -184,6 +184,8 @@ pub enum Instruction {
     NopImmediate(u8),
     NopZeroPage(u8),
     NopXZeroPage(u8),
+    NopAbsolute(u16),
+    NopXAbsolute(u16),
 }
 
 fn next_byte<I: Iterator<Item = u8>>(iter: &mut I) -> u8 {
@@ -377,6 +379,7 @@ impl Instruction {
                 Ok(Instruction::NopXZeroPage(next_byte(iter)))
             }
             0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa => Ok(Instruction::Nop2),
+            0x0c => Ok(Instruction::NopAbsolute(next_word(iter))),
             _ => Err(opcode),
         }
     }
@@ -562,6 +565,7 @@ mod tests {
             (vec![0x7a], Instruction::Nop2),
             (vec![0xda], Instruction::Nop2),
             (vec![0xfa], Instruction::Nop2),
+            (vec![0x0c, 0xff, 0x23], Instruction::NopAbsolute(0x23ff)),
         ];
 
         for (opcodes, instruction) in pairs {
