@@ -359,6 +359,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::RorXZeroPage(address) => {
+                self.ror_address(self.zero_page_address(address, self.x) as u16);
+                cycles(6)
+            }
+
             Instruction::RorAbsolute(address) => {
                 self.ror_address(address);
                 cycles(6)
