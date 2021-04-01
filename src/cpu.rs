@@ -187,13 +187,13 @@ impl Cpu {
             }
 
             Instruction::Ror => {
-                let carry = self.a & 1 != 0;
-                self.a = self.a / 2 + u8::from(self.is_carry_flag_on()) * 128;
-
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(carry);
-
+                self.a = self.ror(self.a);
                 cycles(2)
+            }
+
+            Instruction::RorZeroPage(address) => {
+                self.ror_address(address as u16);
+                cycles(5)
             }
 
             Instruction::Rol => {
@@ -513,6 +513,21 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn ror(&mut self, value: u8) -> u8 {
+        let mut value = value;
+        let carry = value & 1 != 0;
+        value = value / 2 + u8::from(self.is_carry_flag_on()) * 128;
+
+        self.toggle_zero_negative_flag(value);
+        self.set_carry_flag(carry);
+
+        value
+    }
+
+    fn ror_address(&mut self, address: u16) {
+        self.memory[address as usize] = self.ror(self.memory[address as usize]);
     }
 
     fn asl(&mut self, value: u8) -> u8 {
