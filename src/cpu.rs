@@ -362,6 +362,15 @@ impl Cpu {
                 }
             }
 
+            Instruction::StyZeroPage(address) => {
+                let side_effect = self.set_memory_value(address as u16, self.y);
+
+                CpuResult {
+                    cycles_elapsed: 3,
+                    side_effect,
+                }
+            }
+
             Instruction::JsrAbsolute(address) => {
                 let bytes = u16::to_le_bytes(self.pc - 1);
                 self.push(bytes[1]);
