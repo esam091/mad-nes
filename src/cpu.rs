@@ -375,6 +375,20 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::LdaYIndirectIndexed(index) => {
+                let low_addr = self.memory[index as usize];
+
+                let (high_index, overflow1) = index.overflowing_add(1);
+                let high_addr = self.memory[high_index as usize];
+
+                let (address, overflow2) =
+                    u16::from_le_bytes([low_addr, high_addr]).overflowing_add(self.y as u16);
+
+                self.a = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.a);
+                cycles(5 + (overflow1 || overflow2) as u32)
+            }
+
             Instruction::LdaXAbsolute(value) => {
                 self.a = self.memory[value as usize + self.x as usize];
 
