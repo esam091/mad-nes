@@ -370,7 +370,7 @@ impl Instruction {
             0xfe => Ok(Instruction::IncXAbsolute(next_word(iter))),
 
             // Illegal opcodes
-            0x80 | 0x82 | 0xc2 | 0xe2 => Ok(Instruction::NopImmediate(next_byte(iter))),
+            0x80 | 0x82 | 0x89 | 0xc2 | 0xe2 => Ok(Instruction::NopImmediate(next_byte(iter))),
             0x04 | 0x44 | 0x64 => Ok(Instruction::NopZeroPage(next_byte(iter))),
             0x14 | 0x34 | 0x54 | 0x74 | 0xd4 | 0xf4 => {
                 Ok(Instruction::NopXZeroPage(next_byte(iter)))
@@ -542,6 +542,7 @@ mod tests {
             // illegal opcodes
             (vec![0x80, 0xaa], Instruction::NopImmediate(0xaa)),
             (vec![0x82, 0x11], Instruction::NopImmediate(0x11)),
+            (vec![0x89, 0x11], Instruction::NopImmediate(0x11)),
             (vec![0xc2, 0xab], Instruction::NopImmediate(0xab)),
             (vec![0xe2, 0x8d], Instruction::NopImmediate(0x8d)),
             (vec![0x04, 0x2b], Instruction::NopZeroPage(0x2b)),
