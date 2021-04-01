@@ -421,6 +421,13 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::LdyXZeroPage(address) => {
+                self.y = self.zero_page_value(address, self.x);
+                self.toggle_zero_negative_flag(self.y);
+
+                cycles(4)
+            }
+
             Instruction::LdxZeroPage(address) => {
                 self.x = self.memory[address as usize];
                 self.toggle_zero_negative_flag(self.x);
@@ -759,6 +766,14 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn zero_page_address(&self, address: u8, offset: u8) -> u8 {
+        address.overflowing_add(offset).0
+    }
+
+    fn zero_page_value(&self, address: u8, offset: u8) -> u8 {
+        self.memory[self.zero_page_address(address, offset) as usize]
     }
 
     fn absolute_address(&self, address: u16, offset: u8) -> (u16, bool) {
