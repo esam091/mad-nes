@@ -191,6 +191,20 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::LdaXIndexedIndirect(address) => {
+                let low_addr = address.overflowing_add(self.x).0;
+                let high_addr = low_addr.overflowing_add(1).0;
+                let address = u16::from_le_bytes([
+                    self.memory[low_addr as usize],
+                    self.memory[high_addr as usize],
+                ]);
+
+                self.a = self.memory[address as usize];
+
+                self.toggle_zero_negative_flag(self.a);
+                cycles(6)
+            }
+
             Instruction::LdaXAbsolute(value) => {
                 self.a = self.memory[value as usize + self.x as usize];
 
