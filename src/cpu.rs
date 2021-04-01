@@ -188,6 +188,19 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::AslZeroPage(address) => {
+                let mut value = self.memory[address as usize];
+
+                let carry = value & 0x80 != 0;
+                value <<= 1;
+
+                self.memory[address as usize] = value;
+                self.toggle_zero_negative_flag(value);
+                self.set_carry_flag(carry);
+
+                cycles(5)
+            }
+
             Instruction::Ror => {
                 let carry = self.a & 1 != 0;
                 self.a = self.a / 2 + u8::from(self.is_carry_flag_on()) * 128;
