@@ -143,6 +143,12 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::AdcYIndirectIndexed(index) => {
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.adc(value);
+                cycles(5 + overflow as u32)
+            }
+
             Instruction::AdcZeroPage(address) => {
                 self.adc(self.memory[address as usize]);
                 cycles(3)
