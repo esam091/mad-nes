@@ -177,24 +177,12 @@ impl Cpu {
             }
 
             Instruction::Asl => {
-                let carry = self.a & 0x80 != 0;
-                self.a <<= 1;
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(carry);
-
+                self.a = self.asl(self.a);
                 cycles(2)
             }
 
             Instruction::AslZeroPage(address) => {
-                let mut value = self.memory[address as usize];
-
-                let carry = value & 0x80 != 0;
-                value <<= 1;
-
-                self.memory[address as usize] = value;
-                self.toggle_zero_negative_flag(value);
-                self.set_carry_flag(carry);
-
+                self.asl_address(address as u16);
                 cycles(5)
             }
 
@@ -525,6 +513,20 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn asl(&mut self, value: u8) -> u8 {
+        let mut value = value;
+        let carry = value & 0x80 != 0;
+        value <<= 1;
+        self.toggle_zero_negative_flag(value);
+        self.set_carry_flag(carry);
+
+        value
+    }
+
+    fn asl_address(&mut self, address: u16) {
+        self.memory[address as usize] = self.asl(self.memory[address as usize]);
     }
 
     fn lsr(&mut self, value: u8) -> u8 {
