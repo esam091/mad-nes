@@ -113,6 +113,12 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::CmpImmediate(value) => {
+                self.compare(value);
+
+                cycles(2)
+            }
+
             Instruction::Lsr => {
                 let carry = self.a & 1 != 0;
                 self.a >>= 1;
@@ -214,15 +220,6 @@ impl Cpu {
                 self.a = self.memory[value as usize + self.x as usize];
 
                 self.toggle_zero_negative_flag(self.a);
-                cycles(2)
-            }
-
-            Instruction::CmpImmediate(value) => {
-                let (value, overflow) = self.a.overflowing_sub(value);
-                self.set_zero_flag(value == 0);
-                self.set_negative_flag(value & 0x80 != 0);
-                self.set_carry_flag(!overflow);
-
                 cycles(2)
             }
 
@@ -460,6 +457,13 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn compare(&mut self, value: u8) {
+        let (value, overflow) = self.a.overflowing_sub(value);
+        self.set_zero_flag(value == 0);
+        self.set_negative_flag(value & 0x80 != 0);
+        self.set_carry_flag(!overflow);
     }
 
     fn adc(&mut self, value: u8) {
