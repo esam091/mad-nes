@@ -493,6 +493,15 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::BitAbsolute(address) => {
+                let value = self.memory[address as usize];
+
+                self.set_negative_flag(value & 0x80 != 0);
+                self.set_overflow_flag(value & 0x40 != 0);
+                self.set_zero_flag((value & self.a) == 0);
+                cycles(4)
+            }
+
             Instruction::Bvs(offset) => self.jump_if(self.is_overflow_flag_on(), offset),
 
             Instruction::Bvc(offset) => self.jump_if(!self.is_overflow_flag_on(), offset),
