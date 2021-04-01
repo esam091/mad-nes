@@ -424,6 +424,15 @@ impl Cpu {
                 }
             }
 
+            Instruction::StyAbsolute(address) => {
+                let side_effect = self.set_memory_value(address, self.y);
+
+                CpuResult {
+                    cycles_elapsed: 4,
+                    side_effect,
+                }
+            }
+
             Instruction::JsrAbsolute(address) => {
                 let bytes = u16::to_le_bytes(self.pc - 1);
                 self.push(bytes[1]);
