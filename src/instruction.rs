@@ -380,6 +380,9 @@ impl Instruction {
             }
             0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa => Ok(Instruction::Nop2),
             0x0c => Ok(Instruction::NopAbsolute(next_word(iter))),
+            0x1c | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => {
+                Ok(Instruction::NopXAbsolute(next_word(iter)))
+            }
             _ => Err(opcode),
         }
     }
@@ -566,6 +569,12 @@ mod tests {
             (vec![0xda], Instruction::Nop2),
             (vec![0xfa], Instruction::Nop2),
             (vec![0x0c, 0xff, 0x23], Instruction::NopAbsolute(0x23ff)),
+            (vec![0x1c, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
+            (vec![0x3c, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
+            (vec![0x5c, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
+            (vec![0x7c, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
+            (vec![0xdc, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
+            (vec![0xfc, 0xff, 0x23], Instruction::NopXAbsolute(0x23ff)),
         ];
 
         for (opcodes, instruction) in pairs {
