@@ -295,6 +295,17 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::Rti => {
+                self.p = self.pop().bitor(1 << 5); // bit 5 is always on
+                let low_byte = self.pop();
+                let high_byte = self.pop();
+
+                let address = u16::from_le_bytes([low_byte, high_byte]);
+
+                self.pc = address;
+                cycles(6)
+            }
+
             Instruction::Nop => cycles(2),
 
             Instruction::Sec => {
