@@ -390,6 +390,11 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::AslXAbsolute(address) => {
+                self.asl_address(self.absolute_address(address, self.x).0);
+                cycles(7)
+            }
+
             Instruction::Ror => {
                 self.a = self.ror(self.a);
                 cycles(2)
