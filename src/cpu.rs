@@ -102,6 +102,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::OraXZeroPage(address) => {
+                self.or(self.zero_page_value(address, self.x));
+                cycles(4)
+            }
+
             Instruction::OraAbsolute(address) => {
                 self.or(self.memory[address as usize]);
                 cycles(4)
