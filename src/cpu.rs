@@ -271,6 +271,13 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::LdyAbsolute(address) => {
+                self.y = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.x);
+
+                cycles(4)
+            }
+
             Instruction::LdaAbsolute(address) => {
                 self.a = self.memory[address as usize];
                 self.toggle_zero_negative_flag(self.a);
