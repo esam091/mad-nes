@@ -146,19 +146,23 @@ impl Cpu {
             }
 
             Instruction::CpxImmediate(value) => {
-                let (value, overflow) = self.x.overflowing_sub(value);
-
-                self.toggle_zero_negative_flag(value);
-                self.set_carry_flag(!overflow);
+                self.compare(self.x, value);
                 cycles(2)
             }
 
-            Instruction::CpyImmediate(value) => {
-                let (value, overflow) = self.y.overflowing_sub(value);
+            Instruction::CpxZeroPage(address) => {
+                self.compare(self.x, self.memory[address as usize]);
+                cycles(3)
+            }
 
-                self.toggle_zero_negative_flag(value);
-                self.set_carry_flag(!overflow);
+            Instruction::CpyImmediate(value) => {
+                self.compare(self.y, value);
                 cycles(2)
+            }
+
+            Instruction::CpyZeroPage(address) => {
+                self.compare(self.y, self.memory[address as usize]);
+                cycles(3)
             }
 
             Instruction::Lsr => {
