@@ -85,6 +85,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::OraAbsolute(address) => {
+                self.or(self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::EorImmediate(value) => {
                 self.exor(value);
                 cycles(2)
