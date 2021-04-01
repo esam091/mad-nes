@@ -508,6 +508,14 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::LdyXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.y = value;
+                self.toggle_zero_negative_flag(self.y);
+
+                cycles(4 + carry as u32)
+            }
+
             Instruction::LdaImmediate(value) => {
                 self.a = value;
 
