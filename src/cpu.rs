@@ -174,6 +174,11 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::LsrZeroPage(address) => {
+                self.lsr_address(address as u16);
+                cycles(5)
+            }
+
             Instruction::Asl => {
                 let carry = self.a & 0x80 != 0;
                 self.a <<= 1;
@@ -510,6 +515,15 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn lsr_address(&mut self, address: u16) {
+        let value = self.memory[address as usize];
+        let carry = value & 1 != 0;
+        self.memory[address as usize] = value >> 1;
+
+        self.toggle_zero_negative_flag(self.memory[address as usize]);
+        self.set_carry_flag(carry);
     }
 
     fn compare(&mut self, register_value: u8, value: u8) {
