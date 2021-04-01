@@ -76,9 +76,13 @@ impl Cpu {
             }
 
             Instruction::EorImmediate(value) => {
-                self.a ^= value;
-                self.toggle_zero_negative_flag(self.a);
+                self.exor(value);
                 cycles(2)
+            }
+
+            Instruction::EorXIndexedIndirect(index) => {
+                self.exor(self.indexed_indirect_value(index));
+                cycles(6)
             }
 
             Instruction::AdcImmediate(value) => {
@@ -458,6 +462,11 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn exor(&mut self, value: u8) {
+        self.a ^= value;
+        self.toggle_zero_negative_flag(self.a);
     }
 
     fn and(&mut self, value: u8) {
