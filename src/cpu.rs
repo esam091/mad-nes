@@ -191,13 +191,8 @@ impl Cpu {
                 cycles(3)
             }
 
-            Instruction::LdaXIndexedIndirect(address) => {
-                let low_addr = address.overflowing_add(self.x).0;
-                let high_addr = low_addr.overflowing_add(1).0;
-                let address = u16::from_le_bytes([
-                    self.memory[low_addr as usize],
-                    self.memory[high_addr as usize],
-                ]);
+            Instruction::LdaXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
 
                 self.a = self.memory[address as usize];
 
@@ -334,17 +329,10 @@ impl Cpu {
                 }
             }
 
-            Instruction::StaXIndexedIndirect(address) => {
-                let low_addr = address.overflowing_add(self.x).0;
-                let high_addr = low_addr.overflowing_add(1).0;
-                let address = u16::from_le_bytes([
-                    self.memory[low_addr as usize],
-                    self.memory[high_addr as usize],
-                ]);
-
+            Instruction::StaXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
                 let side_effect = self.set_memory_value(address, self.a);
 
-                self.toggle_zero_negative_flag(self.a);
                 CpuResult {
                     cycles_elapsed: 6,
                     side_effect,
@@ -462,6 +450,16 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn indexed_indirect_address(&self, index: u8) -> u16 {
+        let low_addr = index.overflowing_add(self.x).0;
+        let high_addr = low_addr.overflowing_add(1).0;
+
+        u16::from_le_bytes([
+            self.memory[low_addr as usize],
+            self.memory[high_addr as usize],
+        ])
     }
 
     fn jump_if(&mut self, condition: bool, offset: u8) -> CpuResult {
