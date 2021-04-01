@@ -365,6 +365,11 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::LsrXAbsolute(address) => {
+                self.lsr_address(self.absolute_address(address, self.x).0);
+                cycles(7)
+            }
+
             Instruction::Asl => {
                 self.a = self.asl(self.a);
                 cycles(2)
