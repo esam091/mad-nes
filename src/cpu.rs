@@ -478,6 +478,16 @@ impl Cpu {
                 }
             }
 
+            Instruction::StaXAbsolute(address) => {
+                let (address, _) = self.absolute_address(address, self.x);
+                let side_effect = self.set_memory_value(address, self.a);
+
+                CpuResult {
+                    cycles_elapsed: 5,
+                    side_effect,
+                }
+            }
+
             Instruction::StaYAbsolute(address) => {
                 let (address, _) = self.absolute_address(address, self.y);
                 let side_effect = self.set_memory_value(address, self.a);
