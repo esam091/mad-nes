@@ -206,6 +206,20 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::IncZeroPage(address) => {
+                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(5)
+            }
+
+            Instruction::DecZeroPage(address) => {
+                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(5)
+            }
+
             Instruction::LdaImmediate(value) => {
                 self.a = value;
 
