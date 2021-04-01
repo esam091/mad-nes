@@ -67,6 +67,14 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::OraXIndexedIndirect(index) => {
+                let value = self.indexed_indirect_value(index);
+
+                self.a |= value;
+                self.toggle_zero_negative_flag(self.a);
+                cycles(6)
+            }
+
             Instruction::EorImmediate(value) => {
                 self.a ^= value;
                 self.toggle_zero_negative_flag(self.a);
@@ -460,6 +468,10 @@ impl Cpu {
             self.memory[low_addr as usize],
             self.memory[high_addr as usize],
         ])
+    }
+
+    fn indexed_indirect_value(&self, index: u8) -> u8 {
+        self.memory[self.indexed_indirect_address(index) as usize]
     }
 
     fn jump_if(&mut self, condition: bool, offset: u8) -> CpuResult {
