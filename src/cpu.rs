@@ -175,6 +175,30 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Tay => {
+                self.y = self.a;
+                self.toggle_zero_negative_flag(self.y);
+                cycles(2)
+            }
+
+            Instruction::Tya => {
+                self.a = self.y;
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
+            }
+
+            Instruction::Tax => {
+                self.x = self.a;
+                self.toggle_zero_negative_flag(self.x);
+                cycles(2)
+            }
+
+            Instruction::Txa => {
+                self.a = self.x;
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
+            }
+
             Instruction::JmpAbsolute(address) => {
                 self.pc = address;
                 cycles(3)
