@@ -210,6 +210,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::SbcYAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.y);
+                self.sbc(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::CmpImmediate(value) => {
                 self.compare(self.a, value);
                 cycles(2)
