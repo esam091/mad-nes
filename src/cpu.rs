@@ -117,6 +117,12 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::EorYIndirectIndexed(index) => {
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.exor(value);
+                cycles(5 + overflow as u32)
+            }
+
             Instruction::EorZeroPage(address) => {
                 self.exor(self.memory[address as usize]);
                 cycles(3)
