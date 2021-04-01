@@ -532,6 +532,16 @@ impl Cpu {
                 }
             }
 
+            Instruction::StaYIndirectIndexed(index) => {
+                let (address, _) = self.indirect_indexed_address(index);
+                let side_effect = self.set_memory_value(address, self.a);
+
+                CpuResult {
+                    cycles_elapsed: 6,
+                    side_effect,
+                }
+            }
+
             Instruction::StyZeroPage(address) => {
                 let side_effect = self.set_memory_value(address as u16, self.y);
 
