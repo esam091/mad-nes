@@ -163,6 +163,18 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Dex => {
+                self.x = self.x.overflowing_sub(1).0;
+                self.toggle_zero_negative_flag(self.x);
+                cycles(2)
+            }
+
+            Instruction::Dey => {
+                self.y = self.y.overflowing_sub(1).0;
+                self.toggle_zero_negative_flag(self.y);
+                cycles(2)
+            }
+
             Instruction::JmpAbsolute(address) => {
                 self.pc = address;
                 cycles(3)
