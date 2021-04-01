@@ -169,6 +169,12 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::SbcYIndirectIndexed(index) => {
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.sbc(value);
+                cycles(5 + overflow as u32)
+            }
+
             Instruction::SbcZeroPage(address) => {
                 self.sbc(self.memory[address as usize]);
                 cycles(3)
