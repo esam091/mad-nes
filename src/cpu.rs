@@ -426,19 +426,12 @@ impl Cpu {
             }
 
             Instruction::LdaYAbsolute(address) => {
-                let mut address_split = address.to_le_bytes();
-                let (result, carry1) = address_split[0].overflowing_add(self.y);
-                address_split[0] = result;
-
-                let (result, carry2) = address_split[1].overflowing_add(carry1 as u8);
-                address_split[1] = result;
-
-                let address = u16::from_le_bytes(address_split);
+                let (address, carry) = self.absolute_address(address, self.y);
 
                 self.a = self.memory[address as usize];
 
                 self.toggle_zero_negative_flag(self.a);
-                cycles(4 + (carry1 || carry2) as u32)
+                cycles(4 + carry as u32)
             }
 
             Instruction::Beq(offset) => self.jump_if(self.is_zero_flag_on(), offset),
@@ -719,6 +712,19 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn absolute_address(&self, address: u16, offset: u8) -> (u16, bool) {
+        let mut address_split = address.to_le_bytes();
+        let (result, carry1) = address_split[0].overflowing_add(offset);
+        address_split[0] = result;
+
+        let (result, carry2) = address_split[1].overflowing_add(carry1 as u8);
+        address_split[1] = result;
+
+        let address = u16::from_le_bytes(address_split);
+
+        (address, carry1 || carry2)
     }
 
     fn ror(&mut self, value: u8) -> u8 {
