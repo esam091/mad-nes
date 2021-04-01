@@ -629,6 +629,16 @@ impl Cpu {
                 }
             }
 
+            Instruction::StaXZeroPage(address) => {
+                let side_effect =
+                    self.set_memory_value(self.zero_page_address(address, self.x) as u16, self.a);
+
+                CpuResult {
+                    cycles_elapsed: 4,
+                    side_effect,
+                }
+            }
+
             Instruction::StxZeroPage(address) => {
                 let side_effect = self.set_memory_value(address as u16, self.x);
                 CpuResult {
