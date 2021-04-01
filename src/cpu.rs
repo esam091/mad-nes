@@ -102,14 +102,17 @@ impl Cpu {
 
             Instruction::AdcImmediate(value) => {
                 self.adc(value);
-
                 cycles(2)
             }
 
             Instruction::AdcXIndexedIndirect(index) => {
                 self.adc(self.indexed_indirect_value(index));
-
                 cycles(6)
+            }
+
+            Instruction::AdcZeroPage(address) => {
+                self.adc(self.memory[address as usize]);
+                cycles(3)
             }
 
             Instruction::SbcImmediate(value) => {
