@@ -277,7 +277,7 @@ impl Cpu {
             }
 
             Instruction::JsrAbsolute(address) => {
-                let bytes = self.pc.to_le_bytes();
+                let bytes = u16::to_le_bytes(self.pc - 1);
                 self.push(bytes[1]);
                 self.push(bytes[0]);
 
@@ -291,7 +291,7 @@ impl Cpu {
 
                 let address = u16::from_le_bytes([low_byte, high_byte]);
 
-                self.pc = address;
+                self.pc = address + 1;
                 cycles(6)
             }
 
