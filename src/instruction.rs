@@ -181,6 +181,7 @@ pub enum Instruction {
 
     //illegal opcodes
     NopImmediate(u8),
+    NopZeroPage(u8),
 }
 
 fn next_byte<I: Iterator<Item = u8>>(iter: &mut I) -> u8 {
@@ -369,7 +370,7 @@ impl Instruction {
 
             // Illegal opcodes
             0x80 | 0x82 | 0xc2 | 0xe2 => Ok(Instruction::NopImmediate(next_byte(iter))),
-
+            0x04 | 0x44 | 0x64 => Ok(Instruction::NopZeroPage(next_byte(iter))),
             _ => Err(opcode),
         }
     }
@@ -539,6 +540,9 @@ mod tests {
             (vec![0x82, 0x11], Instruction::NopImmediate(0x11)),
             (vec![0xc2, 0xab], Instruction::NopImmediate(0xab)),
             (vec![0xe2, 0x8d], Instruction::NopImmediate(0x8d)),
+            (vec![0x04, 0x2b], Instruction::NopZeroPage(0x2b)),
+            (vec![0x44, 0x2b], Instruction::NopZeroPage(0x2b)),
+            (vec![0x64, 0x2b], Instruction::NopZeroPage(0x2b)),
         ];
 
         for (opcodes, instruction) in pairs {
