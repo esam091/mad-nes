@@ -130,6 +130,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::AdcAbsolute(address) => {
+                self.adc(self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::SbcImmediate(value) => {
                 self.sbc(value);
                 cycles(2)
@@ -158,6 +163,11 @@ impl Cpu {
             Instruction::CmpZeroPage(address) => {
                 self.compare(self.a, self.memory[address as usize]);
                 cycles(3)
+            }
+
+            Instruction::CmpAbsolute(address) => {
+                self.compare(self.a, self.memory[address as usize]);
+                cycles(4)
             }
 
             Instruction::CpxImmediate(value) => {
