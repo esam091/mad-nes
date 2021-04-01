@@ -491,6 +491,29 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::JmpIndirect(address) => {
+                let low_byte = self.memory[address as usize];
+
+                /*
+                    http://nesdev.com/6502_cpu.txt
+
+                    Indirect addressing modes do not handle page boundary crossing at all.
+                    When the parameter's low byte is $FF, the effective address wraps
+                    around and the CPU fetches high byte from $xx00 instead of $xx00+$0100.
+                    E.g. JMP ($01FF) fetches PCL from $01FF and PCH from $0100,
+                    and LDA ($FF),Y fetches the base address from $FF and $00.
+                */
+                let mut high_address_split = address.to_le_bytes();
+                high_address_split[0] = high_address_split[0].overflowing_add(1).0;
+
+                let high_address = u16::from_le_bytes(high_address_split);
+                let high_byte = self.memory[high_address as usize];
+
+                self.pc = u16::from_le_bytes([low_byte, high_byte]);
+
+                cycles(5)
+            }
+
             Instruction::Bne(offset) => self.jump_if(!self.is_zero_flag_on(), offset),
 
             Instruction::Brk => {
