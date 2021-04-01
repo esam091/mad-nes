@@ -690,6 +690,16 @@ impl Cpu {
                 }
             }
 
+            Instruction::StxYZeroPage(address) => {
+                let side_effect =
+                    self.set_memory_value(self.zero_page_address(address, self.y) as u16, self.x);
+
+                CpuResult {
+                    cycles_elapsed: 4,
+                    side_effect,
+                }
+            }
+
             Instruction::StxAbsolute(address) => {
                 let side_effect = self.set_memory_value(address, self.x);
                 CpuResult {
