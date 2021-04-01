@@ -467,6 +467,14 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::IncXAbsolute(address) => {
+                let (address, _) = self.absolute_address(address, self.x);
+                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(7)
+            }
+
             Instruction::DecZeroPage(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
                 self.toggle_zero_negative_flag(self.memory[address as usize]);
