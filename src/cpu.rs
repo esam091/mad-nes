@@ -95,6 +95,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::OraYIndirectIndexed(index) => {
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.or(value);
+                cycles(5 + overflow as u32)
+            }
+
             Instruction::EorImmediate(value) => {
                 self.exor(value);
                 cycles(2)
@@ -376,17 +382,10 @@ impl Cpu {
             }
 
             Instruction::LdaYIndirectIndexed(index) => {
-                let low_addr = self.memory[index as usize];
-
-                let (high_index, overflow1) = index.overflowing_add(1);
-                let high_addr = self.memory[high_index as usize];
-
-                let (address, overflow2) =
-                    u16::from_le_bytes([low_addr, high_addr]).overflowing_add(self.y as u16);
-
-                self.a = self.memory[address as usize];
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.a = value;
                 self.toggle_zero_negative_flag(self.a);
-                cycles(5 + (overflow1 || overflow2) as u32)
+                cycles(5 + (overflow) as u32)
             }
 
             Instruction::LdaXAbsolute(value) => {
@@ -745,6 +744,24 @@ impl Cpu {
     fn or(&mut self, value: u8) {
         self.a |= value;
         self.toggle_zero_negative_flag(self.a);
+    }
+
+    fn indirect_indexed_address(&self, index: u8) -> (u16, bool) {
+        let low_addr = self.memory[index as usize];
+
+        let (high_index, overflow1) = index.overflowing_add(1);
+        let high_addr = self.memory[high_index as usize];
+
+        let (address, overflow2) =
+            u16::from_le_bytes([low_addr, high_addr]).overflowing_add(self.y as u16);
+
+        (address, overflow1 || overflow2)
+    }
+
+    fn indirect_indexed_value(&self, index: u8) -> (u8, bool) {
+        let (address, overflow) = self.indirect_indexed_address(index);
+
+        (self.memory[address as usize], overflow)
     }
 
     fn indexed_indirect_address(&self, index: u8) -> u16 {
