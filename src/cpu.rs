@@ -98,17 +98,7 @@ impl Cpu {
             }
 
             Instruction::SbcImmediate(value) => {
-                let (result, not_carry) = self
-                    .a
-                    .overflowing_sub(value + !self.is_carry_flag_on() as u8);
-
-                let (_, overflow) =
-                    (self.a as i8).overflowing_sub(value as i8 + !self.is_carry_flag_on() as i8); // also need to check for edge cases
-
-                self.a = result;
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(!not_carry);
-                self.set_overflow_flag(overflow);
+                self.sbc(value);
 
                 cycles(2)
             }
@@ -470,6 +460,20 @@ impl Cpu {
         self.set_zero_flag(value == 0);
         self.set_negative_flag(value & 0x80 != 0);
         self.set_carry_flag(!overflow);
+    }
+
+    fn sbc(&mut self, value: u8) {
+        let (result, not_carry) = self
+            .a
+            .overflowing_sub(value + !self.is_carry_flag_on() as u8);
+
+        let (_, overflow) =
+            (self.a as i8).overflowing_sub(value as i8 + !self.is_carry_flag_on() as i8); // also need to check for edge cases
+
+        self.a = result;
+        self.toggle_zero_negative_flag(self.a);
+        self.set_carry_flag(!not_carry);
+        self.set_overflow_flag(overflow);
     }
 
     fn adc(&mut self, value: u8) {
