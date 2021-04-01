@@ -166,10 +166,7 @@ impl Cpu {
             }
 
             Instruction::Lsr => {
-                let carry = self.a & 1 != 0;
-                self.a >>= 1;
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(carry);
+                self.a = self.lsr(self.a);
 
                 cycles(2)
             }
@@ -530,13 +527,17 @@ impl Cpu {
         }
     }
 
-    fn lsr_address(&mut self, address: u16) {
-        let value = self.memory[address as usize];
+    fn lsr(&mut self, value: u8) -> u8 {
         let carry = value & 1 != 0;
-        self.memory[address as usize] = value >> 1;
-
-        self.toggle_zero_negative_flag(self.memory[address as usize]);
+        let value = value >> 1;
+        self.toggle_zero_negative_flag(value);
         self.set_carry_flag(carry);
+
+        value
+    }
+
+    fn lsr_address(&mut self, address: u16) {
+        self.memory[address as usize] = self.lsr(self.memory[address as usize]);
     }
 
     fn compare(&mut self, register_value: u8, value: u8) {
