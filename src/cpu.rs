@@ -95,6 +95,11 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::EorZeroPage(address) => {
+                self.exor(self.memory[address as usize]);
+                cycles(3)
+            }
+
             Instruction::AdcImmediate(value) => {
                 self.adc(value);
 
