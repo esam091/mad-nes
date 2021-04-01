@@ -101,6 +101,13 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::OraYAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.y);
+
+                self.or(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::OraYIndirectIndexed(index) => {
                 let (value, overflow) = self.indirect_indexed_value(index);
                 self.or(value);
@@ -725,6 +732,12 @@ impl Cpu {
         let address = u16::from_le_bytes(address_split);
 
         (address, carry1 || carry2)
+    }
+
+    fn absolute_value(&self, address: u16, offset: u8) -> (u8, bool) {
+        let (address, carry) = self.absolute_address(address, offset);
+
+        (self.memory[address as usize], carry)
     }
 
     fn ror(&mut self, value: u8) -> u8 {
