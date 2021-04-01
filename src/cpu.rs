@@ -596,11 +596,13 @@ impl Cpu {
                 cycles(5 + (overflow) as u32)
             }
 
-            Instruction::LdaXAbsolute(value) => {
-                self.a = self.memory[value as usize + self.x as usize];
+            Instruction::LdaXAbsolute(address) => {
+                let (address, carry) = self.absolute_address(address, self.x);
+
+                self.a = self.memory[address as usize];
 
                 self.toggle_zero_negative_flag(self.a);
-                cycles(2)
+                cycles(4 + carry as u32)
             }
 
             Instruction::LdaYAbsolute(address) => {
