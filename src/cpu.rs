@@ -200,6 +200,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::CpyAbsolute(address) => {
+                self.compare(self.y, self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::Lsr => {
                 self.a = self.lsr(self.a);
 
