@@ -197,12 +197,13 @@ impl Cpu {
             }
 
             Instruction::Rol => {
-                let carry = self.a & 0x80 != 0;
-                self.a = self.a.overflowing_mul(2).0 + self.is_carry_flag_on() as u8;
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(carry);
-
+                self.a = self.rol(self.a);
                 cycles(2)
+            }
+
+            Instruction::RolZeroPage(address) => {
+                self.rol_address(address as u16);
+                cycles(5)
             }
 
             Instruction::LdaImmediate(value) => {
@@ -528,6 +529,20 @@ impl Cpu {
 
     fn ror_address(&mut self, address: u16) {
         self.memory[address as usize] = self.ror(self.memory[address as usize]);
+    }
+
+    fn rol(&mut self, value: u8) -> u8 {
+        let mut value = value;
+        let carry = value & 0x80 != 0;
+        value = value.overflowing_mul(2).0 + self.is_carry_flag_on() as u8;
+        self.toggle_zero_negative_flag(value);
+        self.set_carry_flag(carry);
+
+        value
+    }
+
+    fn rol_address(&mut self, address: u16) {
+        self.memory[address as usize] = self.rol(self.memory[address as usize]);
     }
 
     fn asl(&mut self, value: u8) -> u8 {
