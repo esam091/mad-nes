@@ -70,6 +70,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::AndAbsolute(address) => {
+                self.and(self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::OraImmediate(value) => {
                 self.or(value);
                 cycles(2)
