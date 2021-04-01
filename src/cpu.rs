@@ -150,6 +150,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::SbcAbsolute(address) => {
+                self.sbc(self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::CmpImmediate(value) => {
                 self.compare(self.a, value);
                 cycles(2)
