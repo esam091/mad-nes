@@ -86,17 +86,15 @@ impl Cpu {
             }
 
             Instruction::AdcImmediate(value) => {
-                let (result, carry) = self
-                    .a
-                    .overflowing_add(value + self.is_carry_flag_on() as u8); // maybe we should check for second carry?
-                let (_, overflow) = (self.a as i8).overflowing_add(value as i8); // also check for overflow with carry?
-
-                self.a = result;
-                self.toggle_zero_negative_flag(self.a);
-                self.set_carry_flag(carry);
-                self.set_overflow_flag(overflow);
+                self.adc(value);
 
                 cycles(2)
+            }
+
+            Instruction::AdcXIndexedIndirect(index) => {
+                self.adc(self.indexed_indirect_value(index));
+
+                cycles(6)
             }
 
             Instruction::SbcImmediate(value) => {
@@ -462,6 +460,18 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn adc(&mut self, value: u8) {
+        let (result, carry) = self
+            .a
+            .overflowing_add(value + self.is_carry_flag_on() as u8); // maybe we should check for second carry?
+        let (_, overflow) = (self.a as i8).overflowing_add(value as i8); // also check for overflow with carry?
+
+        self.a = result;
+        self.toggle_zero_negative_flag(self.a);
+        self.set_carry_flag(carry);
+        self.set_overflow_flag(overflow);
     }
 
     fn exor(&mut self, value: u8) {
