@@ -185,6 +185,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::CpxAbsolute(address) => {
+                self.compare(self.x, self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::CpyImmediate(value) => {
                 self.compare(self.y, value);
                 cycles(2)
