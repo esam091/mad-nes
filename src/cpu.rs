@@ -418,6 +418,14 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::DecXZeroPage(address) => {
+                let address = self.zero_page_address(address, self.x);
+                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(6)
+            }
+
             Instruction::DecAbsolute(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
                 self.toggle_zero_negative_flag(self.memory[address as usize]);
