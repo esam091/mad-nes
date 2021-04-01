@@ -379,6 +379,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::RolXZeroPage(address) => {
+                self.rol_address(self.zero_page_address(address, self.x) as u16);
+                cycles(6)
+            }
+
             Instruction::RolAbsolute(address) => {
                 self.rol_address(address);
                 cycles(6)
