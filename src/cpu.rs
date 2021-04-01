@@ -383,6 +383,16 @@ impl Cpu {
                 }
             }
 
+            Instruction::StaYAbsolute(address) => {
+                let (address, _) = self.absolute_address(address, self.y);
+                let side_effect = self.set_memory_value(address, self.a);
+
+                CpuResult {
+                    cycles_elapsed: 5,
+                    side_effect,
+                }
+            }
+
             Instruction::LdxImmediate(value) => {
                 self.x = value;
                 self.toggle_zero_negative_flag(self.x);
