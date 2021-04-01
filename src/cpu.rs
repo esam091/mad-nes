@@ -129,14 +129,17 @@ impl Cpu {
 
             Instruction::CmpImmediate(value) => {
                 self.compare(value);
-
                 cycles(2)
             }
 
             Instruction::CmpXIndexedIndirect(index) => {
                 self.compare(self.indexed_indirect_value(index));
-
                 cycles(6)
+            }
+
+            Instruction::CmpZeroPage(address) => {
+                self.compare(self.memory[address as usize]);
+                cycles(3)
             }
 
             Instruction::Lsr => {
