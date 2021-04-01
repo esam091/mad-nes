@@ -296,6 +296,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::CmpXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.compare(self.a, value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::CmpYAbsolute(address) => {
                 let (value, carry) = self.absolute_value(address, self.y);
                 self.compare(self.a, value);
