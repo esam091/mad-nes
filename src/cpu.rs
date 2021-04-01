@@ -319,6 +319,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::LsrXZeroPage(address) => {
+                self.lsr_address(self.zero_page_address(address, self.x) as u16);
+                cycles(6)
+            }
+
             Instruction::LsrAbsolute(address) => {
                 self.lsr_address(address);
                 cycles(6)
