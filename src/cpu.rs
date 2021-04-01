@@ -217,7 +217,7 @@ impl Cpu {
             }
 
             Instruction::LsrAbsolute(address) => {
-                self.lsr_address(address as u16);
+                self.lsr_address(address);
                 cycles(6)
             }
 
@@ -232,7 +232,7 @@ impl Cpu {
             }
 
             Instruction::AslAbsolute(address) => {
-                self.asl_address(address as u16);
+                self.asl_address(address);
                 cycles(6)
             }
 
@@ -246,6 +246,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::RorAbsolute(address) => {
+                self.ror_address(address);
+                cycles(6)
+            }
+
             Instruction::Rol => {
                 self.a = self.rol(self.a);
                 cycles(2)
@@ -254,6 +259,11 @@ impl Cpu {
             Instruction::RolZeroPage(address) => {
                 self.rol_address(address as u16);
                 cycles(5)
+            }
+
+            Instruction::RolAbsolute(address) => {
+                self.rol_address(address);
+                cycles(6)
             }
 
             Instruction::IncZeroPage(address) => {
