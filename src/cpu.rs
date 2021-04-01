@@ -259,6 +259,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::SbcXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.sbc(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::SbcYAbsolute(address) => {
                 let (value, carry) = self.absolute_value(address, self.y);
                 self.sbc(value);
