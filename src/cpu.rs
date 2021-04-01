@@ -199,6 +199,18 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Tsx => {
+                self.x = self.sp;
+                self.toggle_zero_negative_flag(self.x);
+                cycles(2)
+            }
+
+            Instruction::Txs => {
+                self.sp = self.x;
+                self.toggle_zero_negative_flag(self.sp);
+                cycles(2)
+            }
+
             Instruction::JmpAbsolute(address) => {
                 self.pc = address;
                 cycles(3)
