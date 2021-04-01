@@ -180,6 +180,7 @@ pub enum Instruction {
     SbcYAbsolute(u16),
 
     //illegal opcodes
+    Nop2,
     NopImmediate(u8),
     NopZeroPage(u8),
     NopXZeroPage(u8),
@@ -375,6 +376,7 @@ impl Instruction {
             0x14 | 0x34 | 0x54 | 0x74 | 0xd4 | 0xf4 => {
                 Ok(Instruction::NopXZeroPage(next_byte(iter)))
             }
+            0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa => Ok(Instruction::Nop2),
             _ => Err(opcode),
         }
     }
@@ -554,6 +556,12 @@ mod tests {
             (vec![0x74, 0x2b], Instruction::NopXZeroPage(0x2b)),
             (vec![0xd4, 0x2b], Instruction::NopXZeroPage(0x2b)),
             (vec![0xf4, 0x2b], Instruction::NopXZeroPage(0x2b)),
+            (vec![0x1a], Instruction::Nop2),
+            (vec![0x3a], Instruction::Nop2),
+            (vec![0x5a], Instruction::Nop2),
+            (vec![0x7a], Instruction::Nop2),
+            (vec![0xda], Instruction::Nop2),
+            (vec![0xfa], Instruction::Nop2),
         ];
 
         for (opcodes, instruction) in pairs {
