@@ -121,6 +121,25 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Ror => {
+                let carry = self.a & 1 != 0;
+                self.a = self.a / 2 + u8::from(self.is_carry_flag_on()) * 128;
+
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(carry);
+
+                cycles(2)
+            }
+
+            Instruction::Rol => {
+                let carry = self.a & 0x80 != 0;
+                self.a = self.a.overflowing_mul(2).0 + self.is_carry_flag_on() as u8;
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(carry);
+
+                cycles(2)
+            }
+
             Instruction::LdaImmediate(value) => {
                 self.a = value;
 
@@ -553,6 +572,7 @@ mod test {
                 cpu.pc, cpu.a, cpu.x, cpu.y, cpu.p, cpu.sp, cycles
             );
 
+            println!("pc: {:#04X?}", cpu.pc);
             assert_eq!(cpu_state, trimmed_line);
 
             cycles += cpu.step().cycles_elapsed;
