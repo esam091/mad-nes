@@ -415,6 +415,11 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::RorXAbsolute(address) => {
+                self.ror_address(self.absolute_address(address, self.x).0);
+                cycles(7)
+            }
+
             Instruction::Rol => {
                 self.a = self.rol(self.a);
                 cycles(2)
