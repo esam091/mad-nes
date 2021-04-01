@@ -440,6 +440,11 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::RolXAbsolute(address) => {
+                self.rol_address(self.absolute_address(address, self.x).0);
+                cycles(7)
+            }
+
             Instruction::IncZeroPage(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
                 self.toggle_zero_negative_flag(self.memory[address as usize]);
