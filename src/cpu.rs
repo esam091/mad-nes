@@ -486,6 +486,13 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::LdaXZeroPage(address) => {
+                self.a = self.zero_page_value(address, self.x);
+                self.toggle_zero_negative_flag(self.a);
+
+                cycles(4)
+            }
+
             Instruction::LdaXIndexedIndirect(index) => {
                 let address = self.indexed_indirect_address(index);
 
