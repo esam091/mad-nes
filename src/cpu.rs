@@ -76,6 +76,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::AndXZeroPage(address) => {
+                self.and(self.zero_page_value(address, self.x));
+                cycles(4)
+            }
+
             Instruction::AndAbsolute(address) => {
                 self.and(self.memory[address as usize]);
                 cycles(4)
