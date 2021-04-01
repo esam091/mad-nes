@@ -131,18 +131,34 @@ impl Cpu {
             }
 
             Instruction::CmpImmediate(value) => {
-                self.compare(value);
+                self.compare(self.a, value);
                 cycles(2)
             }
 
             Instruction::CmpXIndexedIndirect(index) => {
-                self.compare(self.indexed_indirect_value(index));
+                self.compare(self.a, self.indexed_indirect_value(index));
                 cycles(6)
             }
 
             Instruction::CmpZeroPage(address) => {
-                self.compare(self.memory[address as usize]);
+                self.compare(self.a, self.memory[address as usize]);
                 cycles(3)
+            }
+
+            Instruction::CpxImmediate(value) => {
+                let (value, overflow) = self.x.overflowing_sub(value);
+
+                self.toggle_zero_negative_flag(value);
+                self.set_carry_flag(!overflow);
+                cycles(2)
+            }
+
+            Instruction::CpyImmediate(value) => {
+                let (value, overflow) = self.y.overflowing_sub(value);
+
+                self.toggle_zero_negative_flag(value);
+                self.set_carry_flag(!overflow);
+                cycles(2)
             }
 
             Instruction::Lsr => {
@@ -329,22 +345,6 @@ impl Cpu {
                 cycles(3)
             }
 
-            Instruction::CpxImmediate(value) => {
-                let (value, overflow) = self.x.overflowing_sub(value);
-
-                self.toggle_zero_negative_flag(value);
-                self.set_carry_flag(!overflow);
-                cycles(2)
-            }
-
-            Instruction::CpyImmediate(value) => {
-                let (value, overflow) = self.y.overflowing_sub(value);
-
-                self.toggle_zero_negative_flag(value);
-                self.set_carry_flag(!overflow);
-                cycles(2)
-            }
-
             Instruction::Bne(offset) => self.jump_if(!self.is_zero_flag_on(), offset),
 
             Instruction::Brk => {
@@ -508,8 +508,8 @@ impl Cpu {
         }
     }
 
-    fn compare(&mut self, value: u8) {
-        let (value, overflow) = self.a.overflowing_sub(value);
+    fn compare(&mut self, register_value: u8, value: u8) {
+        let (value, overflow) = register_value.overflowing_sub(value);
         self.set_zero_flag(value == 0);
         self.set_negative_flag(value & 0x80 != 0);
         self.set_carry_flag(!overflow);
