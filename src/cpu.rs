@@ -103,6 +103,24 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Lsr => {
+                let carry = self.a & 1 != 0;
+                self.a >>= 1;
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(carry);
+
+                cycles(2)
+            }
+
+            Instruction::Asl => {
+                let carry = self.a & 0x80 != 0;
+                self.a <<= 1;
+                self.toggle_zero_negative_flag(self.a);
+                self.set_carry_flag(carry);
+
+                cycles(2)
+            }
+
             Instruction::LdaImmediate(value) => {
                 self.a = value;
 
