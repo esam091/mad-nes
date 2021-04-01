@@ -339,6 +339,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::AslXZeroPage(address) => {
+                self.asl_address(self.zero_page_address(address, self.x) as u16);
+                cycles(6)
+            }
+
             Instruction::AslAbsolute(address) => {
                 self.asl_address(address);
                 cycles(6)
