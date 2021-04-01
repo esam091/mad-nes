@@ -216,6 +216,11 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::LsrAbsolute(address) => {
+                self.lsr_address(address as u16);
+                cycles(6)
+            }
+
             Instruction::Asl => {
                 self.a = self.asl(self.a);
                 cycles(2)
