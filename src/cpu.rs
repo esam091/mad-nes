@@ -497,6 +497,14 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::DecXAbsolute(address) => {
+                let (address, _) = self.absolute_address(address, self.x);
+                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(7)
+            }
+
             Instruction::StaAbsolute(address) => {
                 let side_effect = self.set_memory_value(address, self.a);
 
