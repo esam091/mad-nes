@@ -65,6 +65,12 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::AndYIndirectIndexed(index) => {
+                let (value, overflow) = self.indirect_indexed_value(index);
+                self.and(value);
+                cycles(5 + overflow as u32)
+            }
+
             Instruction::AndZeroPage(address) => {
                 self.and(self.memory[address as usize]);
                 cycles(3)
