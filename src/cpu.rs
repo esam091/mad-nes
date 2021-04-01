@@ -938,6 +938,11 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::Cli => {
+                self.set_interrupt_flag(false);
+                cycles(2)
+            }
+
             Instruction::Cld => {
                 self.set_decimal_flag(false);
                 cycles(2)
@@ -973,8 +978,6 @@ impl Cpu {
 
                 cycles(4)
             }
-
-            _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
 
