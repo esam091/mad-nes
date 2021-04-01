@@ -56,22 +56,22 @@ impl Cpu {
 
         match instruction {
             Instruction::AndImmediate(value) => {
-                self.a &= value;
-                self.toggle_zero_negative_flag(self.a);
+                self.and(value);
                 cycles(2)
             }
 
+            Instruction::AndXIndexedIndirect(index) => {
+                self.and(self.indexed_indirect_value(index));
+                cycles(6)
+            }
+
             Instruction::OraImmediate(value) => {
-                self.a |= value;
-                self.toggle_zero_negative_flag(self.a);
+                self.or(value);
                 cycles(2)
             }
 
             Instruction::OraXIndexedIndirect(index) => {
-                let value = self.indexed_indirect_value(index);
-
-                self.a |= value;
-                self.toggle_zero_negative_flag(self.a);
+                self.or(self.indexed_indirect_value(index));
                 cycles(6)
             }
 
@@ -458,6 +458,16 @@ impl Cpu {
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn and(&mut self, value: u8) {
+        self.a &= value;
+        self.toggle_zero_negative_flag(self.a);
+    }
+
+    fn or(&mut self, value: u8) {
+        self.a |= value;
+        self.toggle_zero_negative_flag(self.a);
     }
 
     fn indexed_indirect_address(&self, index: u8) -> u16 {
