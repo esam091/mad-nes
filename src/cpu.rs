@@ -86,6 +86,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::AndXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.and(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::AndYAbsolute(address) => {
                 let (value, carry) = self.absolute_value(address, self.y);
                 self.and(value);
