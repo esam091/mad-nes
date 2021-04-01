@@ -257,6 +257,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::CmpXZeroPage(address) => {
+                self.compare(self.a, self.zero_page_value(address, self.x));
+                cycles(4)
+            }
+
             Instruction::CmpAbsolute(address) => {
                 self.compare(self.a, self.memory[address as usize]);
                 cycles(4)
