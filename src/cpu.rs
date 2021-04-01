@@ -334,6 +334,23 @@ impl Cpu {
                 }
             }
 
+            Instruction::StaXIndexedIndirect(address) => {
+                let low_addr = address.overflowing_add(self.x).0;
+                let high_addr = low_addr.overflowing_add(1).0;
+                let address = u16::from_le_bytes([
+                    self.memory[low_addr as usize],
+                    self.memory[high_addr as usize],
+                ]);
+
+                let side_effect = self.set_memory_value(address, self.a);
+
+                self.toggle_zero_negative_flag(self.a);
+                CpuResult {
+                    cycles_elapsed: 6,
+                    side_effect,
+                }
+            }
+
             Instruction::JsrAbsolute(address) => {
                 let bytes = u16::to_le_bytes(self.pc - 1);
                 self.push(bytes[1]);
