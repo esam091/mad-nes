@@ -119,6 +119,12 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::CmpXIndexedIndirect(index) => {
+                self.compare(self.indexed_indirect_value(index));
+
+                cycles(6)
+            }
+
             Instruction::Lsr => {
                 let carry = self.a & 1 != 0;
                 self.a >>= 1;
