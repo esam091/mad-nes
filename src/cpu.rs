@@ -81,6 +81,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::AndYAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.y);
+                self.and(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::OraImmediate(value) => {
                 self.or(value);
                 cycles(2)
