@@ -117,14 +117,17 @@ impl Cpu {
 
             Instruction::SbcImmediate(value) => {
                 self.sbc(value);
-
                 cycles(2)
             }
 
             Instruction::SbcXIndexedIndirect(index) => {
                 self.sbc(self.indexed_indirect_value(index));
-
                 cycles(6)
+            }
+
+            Instruction::SbcZeroPage(address) => {
+                self.sbc(self.memory[address as usize]);
+                cycles(3)
             }
 
             Instruction::CmpImmediate(value) => {
