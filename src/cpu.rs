@@ -110,6 +110,11 @@ impl Cpu {
                 cycles(3)
             }
 
+            Instruction::EorAbsolute(address) => {
+                self.exor(self.memory[address as usize]);
+                cycles(4)
+            }
+
             Instruction::AdcImmediate(value) => {
                 self.adc(value);
                 cycles(2)
