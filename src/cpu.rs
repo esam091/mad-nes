@@ -207,7 +207,6 @@ impl Cpu {
 
             Instruction::Txs => {
                 self.sp = self.x;
-                self.toggle_zero_negative_flag(self.sp);
                 cycles(2)
             }
 
@@ -251,6 +250,14 @@ impl Cpu {
                 let side_effect = self.set_memory_value(address as u16, self.x);
                 CpuResult {
                     cycles_elapsed: 3,
+                    side_effect,
+                }
+            }
+
+            Instruction::StxAbsolute(address) => {
+                let side_effect = self.set_memory_value(address, self.x);
+                CpuResult {
+                    cycles_elapsed: 4,
                     side_effect,
                 }
             }
