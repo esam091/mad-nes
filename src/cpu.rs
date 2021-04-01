@@ -173,6 +173,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::EorXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.exor(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::EorYAbsolute(address) => {
                 let (value, carry) = self.absolute_value(address, self.y);
                 self.exor(value);
