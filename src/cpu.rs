@@ -117,6 +117,12 @@ impl Cpu {
                 cycles(4)
             }
 
+            Instruction::OraXAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.x);
+                self.or(value);
+                cycles(4 + carry as u32)
+            }
+
             Instruction::OraYAbsolute(address) => {
                 let (value, carry) = self.absolute_value(address, self.y);
 
