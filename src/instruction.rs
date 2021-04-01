@@ -178,6 +178,9 @@ pub enum Instruction {
     SbcAbsolute(u16),
     SbcXAbsolute(u16),
     SbcYAbsolute(u16),
+
+    //illegal opcodes
+    NopImmediate(u8),
 }
 
 fn next_byte<I: Iterator<Item = u8>>(iter: &mut I) -> u8 {
@@ -364,6 +367,9 @@ impl Instruction {
             0xfd => Ok(Instruction::SbcXAbsolute(next_word(iter))),
             0xfe => Ok(Instruction::IncXAbsolute(next_word(iter))),
 
+            // Illegal opcodes
+            0x80 | 0x82 | 0xc2 | 0xe2 => Ok(Instruction::NopImmediate(next_byte(iter))),
+
             _ => Err(opcode),
         }
     }
@@ -528,6 +534,11 @@ mod tests {
             (vec![0x19, 0x22, 0x99], Instruction::OraYAbsolute(0x9922)),
             (vec![0xb0, 0x04], Instruction::Bcs(0x04)),
             (vec![0x90, 0xc0], Instruction::Bcc(0xc0)),
+            // illegal opcodes
+            (vec![0x80, 0xaa], Instruction::NopImmediate(0xaa)),
+            (vec![0x82, 0x11], Instruction::NopImmediate(0x11)),
+            (vec![0xc2, 0xab], Instruction::NopImmediate(0xab)),
+            (vec![0xe2, 0x8d], Instruction::NopImmediate(0x8d)),
         ];
 
         for (opcodes, instruction) in pairs {
