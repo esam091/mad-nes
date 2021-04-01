@@ -397,13 +397,6 @@ impl Cpu {
                 cycles(6)
             }
 
-            Instruction::LdaImmediate(value) => {
-                self.a = value;
-
-                self.toggle_zero_negative_flag(self.a);
-                cycles(2)
-            }
-
             Instruction::StaAbsolute(address) => {
                 let side_effect = self.set_memory_value(address, self.a);
 
@@ -470,6 +463,13 @@ impl Cpu {
                 self.toggle_zero_negative_flag(self.x);
 
                 cycles(4)
+            }
+
+            Instruction::LdaImmediate(value) => {
+                self.a = value;
+
+                self.toggle_zero_negative_flag(self.a);
+                cycles(2)
             }
 
             Instruction::LdaAbsolute(address) => {
