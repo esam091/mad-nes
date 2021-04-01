@@ -396,6 +396,14 @@ impl Cpu {
                 cycles(5)
             }
 
+            Instruction::IncXZeroPage(address) => {
+                self.memory[address as usize] =
+                    self.zero_page_value(address, self.x).overflowing_add(1).0;
+                self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+                cycles(6)
+            }
+
             Instruction::IncAbsolute(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
                 self.toggle_zero_negative_flag(self.memory[address as usize]);
