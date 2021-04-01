@@ -126,11 +126,25 @@ impl Cpu {
                 cycles(2)
             }
 
+            Instruction::LdxAbsolute(address) => {
+                self.x = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.x);
+
+                cycles(4)
+            }
+
             Instruction::LdyImmediate(value) => {
                 self.y = value;
                 self.toggle_zero_negative_flag(self.y);
 
                 cycles(2)
+            }
+
+            Instruction::LdaAbsolute(address) => {
+                self.a = self.memory[address as usize];
+                self.toggle_zero_negative_flag(self.a);
+
+                cycles(4)
             }
 
             Instruction::LdaXAbsolute(value) => {
@@ -335,28 +349,19 @@ impl Cpu {
             }
 
             Instruction::Php => {
-                self.sp -= 1;
+                self.push(self.p.bitor(0x10));
 
-                let side_effect = self.set_memory_value(self.sp as u16, self.p.bitor(0x10));
-                CpuResult {
-                    cycles_elapsed: 3,
-                    side_effect,
-                }
+                cycles(3)
             }
 
             Instruction::Pha => {
-                self.sp -= 1;
+                self.push(self.a);
 
-                let side_effect = self.set_memory_value(self.sp as u16, self.a);
-                CpuResult {
-                    cycles_elapsed: 3,
-                    side_effect,
-                }
+                cycles(3)
             }
 
             Instruction::Pla => {
-                self.a = self.memory[self.sp as usize];
-                self.sp += 1;
+                self.a = self.pop();
 
                 self.toggle_zero_negative_flag(self.a);
 
@@ -364,10 +369,7 @@ impl Cpu {
             }
 
             Instruction::Plp => {
-                self.p = self.memory[self.sp as usize]
-                    .bitand(!(1 << 4))
-                    .bitor(1 << 5); // this bit is always on
-                self.sp += 1;
+                self.p = self.pop().bitand(!(1 << 4)).bitor(1 << 5); // this bit is always on
 
                 cycles(4)
             }
@@ -387,13 +389,13 @@ impl Cpu {
     }
 
     fn push(&mut self, value: u8) {
-        self.memory[self.sp as usize] = value;
+        self.memory[self.sp as usize + 0x0100] = value;
         self.sp -= 1;
     }
 
     fn pop(&mut self) -> u8 {
         self.sp += 1;
-        self.memory[self.sp as usize]
+        self.memory[self.sp as usize + 0x0100]
     }
 
     fn set_negative_flag(&mut self, is_on: bool) {
