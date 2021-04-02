@@ -445,35 +445,25 @@ impl Cpu {
                 side_effect: self.rol_address(self.absolute_address(address, self.x).0),
             },
 
-            Instruction::IncZeroPage(address) => {
-                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
+            Instruction::IncZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.inc(address as u16),
+            },
 
-                cycles(5)
-            }
+            Instruction::IncXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.inc(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::IncXZeroPage(address) => {
-                let address = self.zero_page_address(address, self.x);
-                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
+            Instruction::IncAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.inc(address),
+            },
 
-                cycles(6)
-            }
-
-            Instruction::IncAbsolute(address) => {
-                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
-
-                cycles(6)
-            }
-
-            Instruction::IncXAbsolute(address) => {
-                let (address, _) = self.absolute_address(address, self.x);
-                self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
-
-                cycles(7)
-            }
+            Instruction::IncXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.inc(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::DecZeroPage(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
@@ -1255,6 +1245,15 @@ impl Cpu {
                 side_effect: self.rra(self.absolute_address(address, self.y).0),
             },
         }
+    }
+
+    #[must_use]
+    fn inc(&mut self, address: u16) -> Option<SideEffect> {
+        let side_effect =
+            self.set_memory_value(address, self.memory[address as usize].overflowing_add(1).0);
+        self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+        side_effect
     }
 
     fn rra(&mut self, address: u16) -> Option<SideEffect> {
