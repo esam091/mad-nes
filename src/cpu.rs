@@ -994,6 +994,33 @@ impl Cpu {
                 cycles(6)
             }
 
+            Instruction::LaxYIndirectIndexed(index) => {
+                let (value, carry) = self.indirect_indexed_value(index);
+                self.lax(value);
+                cycles(5 + carry as u32)
+            }
+
+            Instruction::LaxZeroPage(address) => {
+                self.lax(self.memory[address as usize]);
+                cycles(3)
+            }
+
+            Instruction::LaxYZeroPage(address) => {
+                self.lax(self.zero_page_value(address, self.y));
+                cycles(4)
+            }
+
+            Instruction::LaxAbsolute(address) => {
+                self.lax(self.absolute_value(address, 0).0);
+                cycles(4)
+            }
+
+            Instruction::LaxYAbsolute(address) => {
+                let (value, carry) = self.absolute_value(address, self.y);
+                self.lax(value);
+                cycles(4 + carry as u32)
+            }
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
@@ -1137,15 +1164,14 @@ impl Cpu {
     }
 
     fn indirect_indexed_address(&self, index: u8) -> (u16, bool) {
-        let low_addr = self.memory[index as usize];
+        let (low_addr, carry1) = self.memory[index as usize].overflowing_add(self.y);
 
-        let (high_index, overflow1) = index.overflowing_add(1);
-        let high_addr = self.memory[high_index as usize];
+        let (high_index, _) = index.overflowing_add(1);
+        let (high_addr, carry2) = self.memory[high_index as usize].overflowing_add(carry1 as u8);
 
-        let (address, overflow2) =
-            u16::from_le_bytes([low_addr, high_addr]).overflowing_add(self.y as u16);
+        let address = u16::from_le_bytes([low_addr, high_addr]);
 
-        (address, overflow1 || overflow2)
+        (address, carry1 || carry2)
     }
 
     fn indirect_indexed_value(&self, index: u8) -> (u8, bool) {
