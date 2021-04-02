@@ -186,6 +186,68 @@ pub enum Instruction {
     NopXZeroPage(u8),
     NopAbsolute(u16),
     NopXAbsolute(u16),
+
+    SbcImmediateIllegal(u8),
+
+    SloZeroPage(u8),
+    SloXZeroPage(u8),
+    SloXIndexedIndirect(u8),
+    SloYIndirectIndexed(u8),
+    SloAbsolute(u16),
+    SloXAbsolute(u16),
+    SloYAbsolute(u16),
+
+    RlaZeroPage(u8),
+    RlaXZeroPage(u8),
+    RlaXIndexedIndirect(u8),
+    RlaYIndirectIndexed(u8),
+    RlaAbsolute(u16),
+    RlaXAbsolute(u16),
+    RlaYAbsolute(u16),
+
+    SreZeroPage(u8),
+    SreXZeroPage(u8),
+    SreXIndexedIndirect(u8),
+    SreYIndirectIndexed(u8),
+    SreAbsolute(u16),
+    SreXAbsolute(u16),
+    SreYAbsolute(u16),
+
+    RraZeroPage(u8),
+    RraXZeroPage(u8),
+    RraXIndexedIndirect(u8),
+    RraYIndirectIndexed(u8),
+    RraAbsolute(u16),
+    RraXAbsolute(u16),
+    RraYAbsolute(u16),
+
+    SaxZeroPage(u8),
+    SaxYZeroPage(u8),
+    SaxXIndexedIndirect(u8),
+    SaxAbsolute(u16),
+
+    LaxZeroPage(u8),
+    LaxYZeroPage(u8),
+    LaxXIndexedIndirect(u8),
+    LaxYIndirectIndexed(u8),
+    LaxAbsolute(u16),
+    LaxYAbsolute(u16),
+
+    DcpZeroPage(u8),
+    DcpXZeroPage(u8),
+    DcpXIndexedIndirect(u8),
+    DcpYIndirectIndexed(u8),
+    DcpAbsolute(u16),
+    DcpXAbsolute(u16),
+    DcpYAbsolute(u16),
+
+    IsbZeroPage(u8),
+    IsbXZeroPage(u8),
+    IsbXIndexedIndirect(u8),
+    IsbYIndirectIndexed(u8),
+    IsbAbsolute(u16),
+    IsbXAbsolute(u16),
+    IsbYAbsolute(u16),
 }
 
 fn next_byte<I: Iterator<Item = u8>>(iter: &mut I) -> u8 {

@@ -1283,7 +1283,7 @@ mod test {
     use super::*;
     use crate::ines::InesRom;
 
-    #[test]
+    // #[test]
     fn nestest() {
         let text = std::fs::read_to_string("nestest.log").unwrap();
         let lines = text.lines();
