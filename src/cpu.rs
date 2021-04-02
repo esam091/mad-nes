@@ -228,7 +228,7 @@ impl Cpu {
                 cycles(4 + carry as u32)
             }
 
-            Instruction::SbcImmediate(value) => {
+            Instruction::SbcImmediate(value) | Instruction::SbcImmediateIllegal(value) => {
                 self.sbc(value);
                 cycles(2)
             }

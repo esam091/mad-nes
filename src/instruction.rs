@@ -505,6 +505,8 @@ impl Instruction {
             0xef => Ok(Instruction::IsbAbsolute(next_word(iter))),
             0xff => Ok(Instruction::IsbXAbsolute(next_word(iter))),
             0xfb => Ok(Instruction::IsbYAbsolute(next_word(iter))),
+
+            0xeb => Ok(Instruction::SbcImmediateIllegal(next_byte(iter))),
             _ => Err(opcode),
         }
     }
@@ -749,6 +751,7 @@ mod tests {
             (vec![0xef, 0xab, 0xcd], Instruction::IsbAbsolute(0xcdab)),
             (vec![0xff, 0xdc, 0xcc], Instruction::IsbXAbsolute(0xccdc)),
             (vec![0xfb, 0x29, 0x88], Instruction::IsbYAbsolute(0x8829)),
+            (vec![0xeb, 0x22], Instruction::SbcImmediateIllegal(0x22)),
         ];
 
         for (opcodes, instruction) in pairs {
