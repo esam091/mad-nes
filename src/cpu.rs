@@ -1080,8 +1080,60 @@ impl Cpu {
                 side_effect: self.dcp(self.absolute_address(address, self.y).0),
             },
 
+            Instruction::IsbXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.isb(self.indexed_indirect_address(index)),
+            },
+
+            Instruction::IsbYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.isb(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::IsbZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.isb(address as u16),
+            },
+
+            Instruction::IsbXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.isb(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::IsbAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.isb(address),
+            },
+
+            Instruction::IsbXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.isb(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::IsbYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.isb(self.absolute_address(address, self.y).0),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn isb(&mut self, address: u16) -> Option<SideEffect> {
+        let value = self.memory[address as usize].overflowing_add(1).0;
+        let side_effect = self.set_memory_value(address, value);
+
+        let (result, sub_overflow) = self
+            .a
+            .overflowing_sub(value + !self.is_carry_flag_on() as u8); // should account for overflow?
+
+        self.toggle_zero_negative_flag(result);
+        self.set_carry_flag(!sub_overflow);
+        self.set_overflow_flag((self.a as i8).overflowing_sub(value as i8).1);
+
+        self.a = result;
+
+        side_effect
     }
 
     fn dcp(&mut self, address: u16) -> Option<SideEffect> {
