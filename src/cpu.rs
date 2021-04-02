@@ -1115,8 +1115,55 @@ impl Cpu {
                 side_effect: self.isb(self.absolute_address(address, self.y).0),
             },
 
+            Instruction::SloXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.slo(self.indexed_indirect_address(index)),
+            },
+
+            Instruction::SloYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.slo(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::SloZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.slo(address as u16),
+            },
+
+            Instruction::SloXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.slo(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::SloAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.slo(address),
+            },
+
+            Instruction::SloXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.slo(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::SloYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.slo(self.absolute_address(address, self.y).0),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn slo(&mut self, address: u16) -> Option<SideEffect> {
+        let carry = self.memory[address as usize].bitand(0x80) != 0;
+        let (value, _) = self.memory[address as usize].overflowing_shl(1);
+        let side_effect = self.set_memory_value(address, value);
+
+        self.a |= value;
+        self.toggle_zero_negative_flag(self.a);
+        self.set_carry_flag(carry);
+
+        side_effect
     }
 
     fn isb(&mut self, address: u16) -> Option<SideEffect> {
