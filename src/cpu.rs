@@ -1155,6 +1155,36 @@ impl Cpu {
                 side_effect: self.rla(self.indexed_indirect_address(index)),
             },
 
+            Instruction::RlaYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.rla(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::RlaZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.rla(address as u16),
+            },
+
+            Instruction::RlaXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rla(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::RlaAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rla(address),
+            },
+
+            Instruction::RlaXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.rla(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::RlaYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.rla(self.absolute_address(address, self.y).0),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
