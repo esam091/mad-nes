@@ -1601,12 +1601,8 @@ impl Cpu {
     pub fn load(rom: &InesRom) -> Cpu {
         let mut memory = [0 as u8; 0x10000];
 
-        // temporarily assign starting address to 0xc000 so nestest can run.
+        memory[0x8000..0x8000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
         memory[0xc000..0xc000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
-
-        let vector_positions = rom.prg_rom_data().len() - 6;
-
-        memory[0xfffa..].copy_from_slice(&rom.prg_rom_data()[vector_positions..]);
 
         // jump to reset vector
         let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);

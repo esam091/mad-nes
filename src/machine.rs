@@ -26,16 +26,6 @@ impl Machine {
         // todo: fix error type
         let rom = InesRom::load(file_path).ok().unwrap();
 
-        let mut memory = [0 as u8; 0x10000];
-        memory[0x8000..0x8000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
-
-        let vector_positions = rom.prg_rom_data().len() - 6;
-
-        memory[0xfffa..].copy_from_slice(&rom.prg_rom_data()[vector_positions..]);
-
-        // jump to reset vector
-        let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
-
         let mut video_memory = [0; 0x4000];
         video_memory[..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
 
@@ -47,7 +37,7 @@ impl Machine {
 
             cycles: 0,
 
-            cpu: Cpu::new(memory, initial_address),
+            cpu: Cpu::load(&rom),
         });
     }
 
