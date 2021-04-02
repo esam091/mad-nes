@@ -989,6 +989,16 @@ impl Cpu {
                 cycles(4 + carry as u32)
             }
 
+            Instruction::LaxXIndexedIndirect(index) => {
+                let value = self.indexed_indirect_value(index);
+                self.a = value;
+                self.x = value;
+
+                self.toggle_zero_negative_flag(value);
+
+                cycles(6)
+            }
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
@@ -1283,7 +1293,7 @@ mod test {
     use super::*;
     use crate::ines::InesRom;
 
-    // #[test]
+    #[test]
     fn nestest() {
         let text = std::fs::read_to_string("nestest.log").unwrap();
         let lines = text.lines();
