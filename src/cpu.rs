@@ -1190,6 +1190,36 @@ impl Cpu {
                 side_effect: self.sre(self.indexed_indirect_address(index) as u16),
             },
 
+            Instruction::SreYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.sre(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::SreZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.sre(address as u16),
+            },
+
+            Instruction::SreXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.sre(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::SreAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.sre(address),
+            },
+
+            Instruction::SreXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.sre(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::SreYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.sre(self.absolute_address(address, self.y).0),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
     }
