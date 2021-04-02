@@ -1657,9 +1657,4 @@ mod test {
             cycles += cpu.step().cycles_elapsed;
         }
     }
-
-    #[test]
-    fn something() {
-        assert_eq!(!0u8, 0xff);
-    }
 }
