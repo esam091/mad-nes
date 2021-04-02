@@ -1045,8 +1045,54 @@ impl Cpu {
                 side_effect: self.sax(address),
             },
 
+            Instruction::DcpXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.dcp(self.indexed_indirect_address(index)),
+            },
+
+            Instruction::DcpYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.dcp(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::DcpZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.dcp(address as u16),
+            },
+
+            Instruction::DcpXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.dcp(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::DcpAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.dcp(address),
+            },
+
+            Instruction::DcpXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.dcp(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::DcpYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.dcp(self.absolute_address(address, self.y).0),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn dcp(&mut self, address: u16) -> Option<SideEffect> {
+        let (value, _) = self.memory[address as usize].overflowing_sub(1);
+        let side_effect = self.set_memory_value(address, value);
+
+        let (result, overflow) = self.a.overflowing_sub(value);
+        self.toggle_zero_negative_flag(result);
+        self.set_carry_flag(!overflow);
+
+        side_effect
     }
 
     fn sax(&mut self, address: u16) -> Option<SideEffect> {
