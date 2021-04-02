@@ -1435,8 +1435,10 @@ impl Cpu {
     fn jump_if(&mut self, condition: bool, offset: u8) -> CpuResult {
         if condition {
             let new_address = self.pc as i16 + (offset as i8) as i16;
+            let page_crossed = (self.pc & 0xff00) != ((new_address as u16) & 0xff00);
+
             self.pc = new_address as u16;
-            return cycles(3);
+            return cycles(3 + page_crossed as u32);
         }
 
         return cycles(2);
