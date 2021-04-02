@@ -1185,8 +1185,28 @@ impl Cpu {
                 side_effect: self.rla(self.absolute_address(address, self.y).0),
             },
 
+            Instruction::SreXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.sre(self.indexed_indirect_address(index) as u16),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn sre(&mut self, address: u16) -> Option<SideEffect> {
+        let mut value = self.memory[address as usize];
+        let carry = value.bitand(1) != 0;
+
+        value >>= 1;
+
+        let side_effect = self.set_memory_value(address, value);
+        self.a ^= value;
+
+        self.toggle_zero_negative_flag(self.a);
+        self.set_carry_flag(carry);
+
+        side_effect
     }
 
     fn rla(&mut self, address: u16) -> Option<SideEffect> {
