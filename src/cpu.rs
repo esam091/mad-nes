@@ -1021,8 +1021,36 @@ impl Cpu {
                 cycles(4 + carry as u32)
             }
 
+            Instruction::SaxXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+
+                CpuResult {
+                    cycles_elapsed: 6,
+                    side_effect: self.sax(address),
+                }
+            }
+
+            Instruction::SaxZeroPage(address) => CpuResult {
+                cycles_elapsed: 3,
+                side_effect: self.sax(address as u16),
+            },
+
+            Instruction::SaxYZeroPage(address) => CpuResult {
+                cycles_elapsed: 4,
+                side_effect: self.sax(self.zero_page_address(address, self.y) as u16),
+            },
+
+            Instruction::SaxAbsolute(address) => CpuResult {
+                cycles_elapsed: 4,
+                side_effect: self.sax(address),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn sax(&mut self, address: u16) -> Option<SideEffect> {
+        self.set_memory_value(address, self.a & self.x)
     }
 
     fn lax(&mut self, value: u8) {
