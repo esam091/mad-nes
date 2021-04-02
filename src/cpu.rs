@@ -465,35 +465,25 @@ impl Cpu {
                 side_effect: self.inc(self.absolute_address(address, self.x).0),
             },
 
-            Instruction::DecZeroPage(address) => {
-                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
+            Instruction::DecZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.dec(address as u16),
+            },
 
-                cycles(5)
-            }
+            Instruction::DecXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.dec(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::DecXZeroPage(address) => {
-                let address = self.zero_page_address(address, self.x);
-                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
+            Instruction::DecAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.dec(address),
+            },
 
-                cycles(6)
-            }
-
-            Instruction::DecAbsolute(address) => {
-                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
-
-                cycles(6)
-            }
-
-            Instruction::DecXAbsolute(address) => {
-                let (address, _) = self.absolute_address(address, self.x);
-                self.memory[address as usize] = self.memory[address as usize].overflowing_sub(1).0;
-                self.toggle_zero_negative_flag(self.memory[address as usize]);
-
-                cycles(7)
-            }
+            Instruction::DecXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.dec(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::StaAbsolute(address) => {
                 let side_effect = self.set_memory_value(address, self.a);
@@ -1245,6 +1235,15 @@ impl Cpu {
                 side_effect: self.rra(self.absolute_address(address, self.y).0),
             },
         }
+    }
+
+    #[must_use]
+    fn dec(&mut self, address: u16) -> Option<SideEffect> {
+        let side_effect =
+            self.set_memory_value(address, self.memory[address as usize].overflowing_sub(1).0);
+        self.toggle_zero_negative_flag(self.memory[address as usize]);
+
+        side_effect
     }
 
     #[must_use]
