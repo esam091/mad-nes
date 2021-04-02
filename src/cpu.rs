@@ -375,25 +375,25 @@ impl Cpu {
                 cycles(2)
             }
 
-            Instruction::AslZeroPage(address) => {
-                self.asl_address(address as u16);
-                cycles(5)
-            }
+            Instruction::AslZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.asl_address(address as u16),
+            },
 
-            Instruction::AslXZeroPage(address) => {
-                self.asl_address(self.zero_page_address(address, self.x) as u16);
-                cycles(6)
-            }
+            Instruction::AslXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.asl_address(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::AslAbsolute(address) => {
-                self.asl_address(address);
-                cycles(6)
-            }
+            Instruction::AslAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.asl_address(address),
+            },
 
-            Instruction::AslXAbsolute(address) => {
-                self.asl_address(self.absolute_address(address, self.x).0);
-                cycles(7)
-            }
+            Instruction::AslXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.asl_address(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::Ror => {
                 self.a = self.ror(self.a);
@@ -1406,8 +1406,10 @@ impl Cpu {
         value
     }
 
-    fn asl_address(&mut self, address: u16) {
-        self.memory[address as usize] = self.asl(self.memory[address as usize]);
+    #[must_use]
+    fn asl_address(&mut self, address: u16) -> Option<SideEffect> {
+        let value = self.asl(self.memory[address as usize]);
+        self.set_memory_value(address, value)
     }
 
     fn lsr(&mut self, value: u8) -> u8 {
