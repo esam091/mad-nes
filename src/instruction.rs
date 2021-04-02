@@ -462,6 +462,14 @@ impl Instruction {
             0x3f => Ok(Instruction::RlaXAbsolute(next_word(iter))),
             0x3b => Ok(Instruction::RlaYAbsolute(next_word(iter))),
 
+            0x47 => Ok(Instruction::SreZeroPage(next_byte(iter))),
+            0x57 => Ok(Instruction::SreXZeroPage(next_byte(iter))),
+            0x43 => Ok(Instruction::SreXIndexedIndirect(next_byte(iter))),
+            0x53 => Ok(Instruction::SreYIndirectIndexed(next_byte(iter))),
+            0x4f => Ok(Instruction::SreAbsolute(next_word(iter))),
+            0x5f => Ok(Instruction::SreXAbsolute(next_word(iter))),
+            0x5b => Ok(Instruction::SreYAbsolute(next_word(iter))),
+
             _ => Err(opcode),
         }
     }
@@ -668,6 +676,13 @@ mod tests {
             (vec![0x2f, 0xc0, 0x92], Instruction::RlaAbsolute(0x92c0)),
             (vec![0x3f, 0xff, 0xcd], Instruction::RlaXAbsolute(0xcdff)),
             (vec![0x3b, 0x99, 0x22], Instruction::RlaYAbsolute(0x2299)),
+            (vec![0x47, 0x12], Instruction::SreZeroPage(0x12)),
+            (vec![0x57, 0x99], Instruction::SreXZeroPage(0x99)),
+            (vec![0x43, 0x38], Instruction::SreXIndexedIndirect(0x38)),
+            (vec![0x53, 0x18], Instruction::SreYIndirectIndexed(0x18)),
+            (vec![0x4f, 0xaa, 0xbb], Instruction::SreAbsolute(0xbbaa)),
+            (vec![0x5f, 0xdd, 0xcc], Instruction::SreXAbsolute(0xccdd)),
+            (vec![0x5b, 0xff, 0xee], Instruction::SreYAbsolute(0xeeff)),
         ];
 
         for (opcodes, instruction) in pairs {
