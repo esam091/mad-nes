@@ -425,25 +425,25 @@ impl Cpu {
                 cycles(2)
             }
 
-            Instruction::RolZeroPage(address) => {
-                self.rol_address(address as u16);
-                cycles(5)
-            }
+            Instruction::RolZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.rol_address(address as u16),
+            },
 
-            Instruction::RolXZeroPage(address) => {
-                self.rol_address(self.zero_page_address(address, self.x) as u16);
-                cycles(6)
-            }
+            Instruction::RolXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rol_address(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::RolAbsolute(address) => {
-                self.rol_address(address);
-                cycles(6)
-            }
+            Instruction::RolAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rol_address(address),
+            },
 
-            Instruction::RolXAbsolute(address) => {
-                self.rol_address(self.absolute_address(address, self.x).0);
-                cycles(7)
-            }
+            Instruction::RolXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.rol_address(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::IncZeroPage(address) => {
                 self.memory[address as usize] = self.memory[address as usize].overflowing_add(1).0;
@@ -1150,8 +1150,21 @@ impl Cpu {
                 side_effect: self.slo(self.absolute_address(address, self.y).0),
             },
 
+            Instruction::RlaXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.rla(self.indexed_indirect_address(index)),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn rla(&mut self, address: u16) -> Option<SideEffect> {
+        let side_effect = self.rol_address(address);
+        self.a &= self.memory[address as usize];
+        self.toggle_zero_negative_flag(self.a);
+
+        side_effect
     }
 
     fn slo(&mut self, address: u16) -> Option<SideEffect> {
@@ -1257,8 +1270,10 @@ impl Cpu {
         value
     }
 
-    fn rol_address(&mut self, address: u16) {
-        self.memory[address as usize] = self.rol(self.memory[address as usize]);
+    #[must_use]
+    fn rol_address(&mut self, address: u16) -> Option<SideEffect> {
+        let value = self.rol(self.memory[address as usize]);
+        self.set_memory_value(address, value)
     }
 
     fn asl(&mut self, value: u8) -> u8 {
