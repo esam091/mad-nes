@@ -1225,7 +1225,35 @@ impl Cpu {
                 side_effect: self.rra(self.indexed_indirect_address(index)),
             },
 
-            _ => todo!("interpret instructions: {:#02X?}", instruction),
+            Instruction::RraYIndirectIndexed(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.rra(self.indirect_indexed_address(index).0),
+            },
+
+            Instruction::RraZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.rra(address as u16),
+            },
+
+            Instruction::RraXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rra(self.zero_page_address(address, self.x) as u16),
+            },
+
+            Instruction::RraAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.rra(address),
+            },
+
+            Instruction::RraXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.rra(self.absolute_address(address, self.x).0),
+            },
+
+            Instruction::RraYAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.rra(self.absolute_address(address, self.y).0),
+            },
         }
     }
 
@@ -1624,7 +1652,6 @@ mod test {
                 cpu.pc, cpu.a, cpu.x, cpu.y, cpu.p, cpu.sp, cycles
             );
 
-            println!("pc: {:#04X?}", cpu.pc);
             assert_eq!(cpu_state, trimmed_line);
 
             cycles += cpu.step().cycles_elapsed;
