@@ -990,17 +990,19 @@ impl Cpu {
             }
 
             Instruction::LaxXIndexedIndirect(index) => {
-                let value = self.indexed_indirect_value(index);
-                self.a = value;
-                self.x = value;
-
-                self.toggle_zero_negative_flag(value);
-
+                self.lax(self.indexed_indirect_value(index));
                 cycles(6)
             }
 
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn lax(&mut self, value: u8) {
+        self.a = value;
+        self.x = value;
+
+        self.toggle_zero_negative_flag(value);
     }
 
     fn zero_page_address(&self, address: u8, offset: u8) -> u8 {
