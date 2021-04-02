@@ -350,25 +350,25 @@ impl Cpu {
                 cycles(2)
             }
 
-            Instruction::LsrZeroPage(address) => {
-                self.lsr_address(address as u16);
-                cycles(5)
-            }
+            Instruction::LsrZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.lsr_address(address as u16),
+            },
 
-            Instruction::LsrXZeroPage(address) => {
-                self.lsr_address(self.zero_page_address(address, self.x) as u16);
-                cycles(6)
-            }
+            Instruction::LsrXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.lsr_address(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::LsrAbsolute(address) => {
-                self.lsr_address(address);
-                cycles(6)
-            }
+            Instruction::LsrAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.lsr_address(address),
+            },
 
-            Instruction::LsrXAbsolute(address) => {
-                self.lsr_address(self.absolute_address(address, self.x).0);
-                cycles(7)
-            }
+            Instruction::LsrXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.lsr_address(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::Asl => {
                 self.a = self.asl(self.a);
@@ -1421,8 +1421,10 @@ impl Cpu {
         value
     }
 
-    fn lsr_address(&mut self, address: u16) {
-        self.memory[address as usize] = self.lsr(self.memory[address as usize]);
+    #[must_use]
+    fn lsr_address(&mut self, address: u16) -> Option<SideEffect> {
+        let value = self.lsr(self.memory[address as usize]);
+        self.set_memory_value(address, value)
     }
 
     fn compare(&mut self, register_value: u8, value: u8) {
