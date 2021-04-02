@@ -36,6 +36,9 @@ impl Machine {
         // jump to reset vector
         let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
 
+        let mut video_memory = [0; 0x4000];
+        video_memory[..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
+
         return Ok(Machine {
             video_memory: [0; 0x4000],
             video_addr1: None,

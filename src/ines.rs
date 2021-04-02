@@ -42,4 +42,8 @@ impl InesRom {
     pub fn prg_rom_data(&self) -> &Vec<u8> {
         &self.prg_rom
     }
+
+    pub fn chr_rom_data(&self) -> &Vec<u8> {
+        &self.chr_rom
+    }
 }
