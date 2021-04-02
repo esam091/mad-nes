@@ -1220,8 +1220,20 @@ impl Cpu {
                 side_effect: self.sre(self.absolute_address(address, self.y).0),
             },
 
+            Instruction::RraXIndexedIndirect(index) => CpuResult {
+                cycles_elapsed: 8,
+                side_effect: self.rra(self.indexed_indirect_address(index)),
+            },
+
             _ => todo!("interpret instructions: {:#02X?}", instruction),
         }
+    }
+
+    fn rra(&mut self, address: u16) -> Option<SideEffect> {
+        self.ror_address(address);
+        self.adc(self.memory[address as usize]);
+
+        None
     }
 
     fn sre(&mut self, address: u16) -> Option<SideEffect> {
