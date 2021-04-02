@@ -400,25 +400,25 @@ impl Cpu {
                 cycles(2)
             }
 
-            Instruction::RorZeroPage(address) => {
-                self.ror_address(address as u16);
-                cycles(5)
-            }
+            Instruction::RorZeroPage(address) => CpuResult {
+                cycles_elapsed: 5,
+                side_effect: self.ror_address(address as u16),
+            },
 
-            Instruction::RorXZeroPage(address) => {
-                self.ror_address(self.zero_page_address(address, self.x) as u16);
-                cycles(6)
-            }
+            Instruction::RorXZeroPage(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.ror_address(self.zero_page_address(address, self.x) as u16),
+            },
 
-            Instruction::RorAbsolute(address) => {
-                self.ror_address(address);
-                cycles(6)
-            }
+            Instruction::RorAbsolute(address) => CpuResult {
+                cycles_elapsed: 6,
+                side_effect: self.ror_address(address),
+            },
 
-            Instruction::RorXAbsolute(address) => {
-                self.ror_address(self.absolute_address(address, self.x).0);
-                cycles(7)
-            }
+            Instruction::RorXAbsolute(address) => CpuResult {
+                cycles_elapsed: 7,
+                side_effect: self.ror_address(self.absolute_address(address, self.x).0),
+            },
 
             Instruction::Rol => {
                 self.a = self.rol(self.a);
@@ -1230,10 +1230,10 @@ impl Cpu {
     }
 
     fn rra(&mut self, address: u16) -> Option<SideEffect> {
-        self.ror_address(address);
+        let side_effect = self.ror_address(address);
         self.adc(self.memory[address as usize]);
 
-        None
+        side_effect
     }
 
     fn sre(&mut self, address: u16) -> Option<SideEffect> {
@@ -1348,8 +1348,10 @@ impl Cpu {
         value
     }
 
-    fn ror_address(&mut self, address: u16) {
-        self.memory[address as usize] = self.ror(self.memory[address as usize]);
+    #[must_use]
+    fn ror_address(&mut self, address: u16) -> Option<SideEffect> {
+        let value = self.ror(self.memory[address as usize]);
+        self.set_memory_value(address, value)
     }
 
     fn rol(&mut self, value: u8) -> u8 {
