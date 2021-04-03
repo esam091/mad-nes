@@ -275,6 +275,10 @@ fn main() -> Result<(), String> {
 
     let debug_texture = create_debug_texture(&texture_creator, canvas.default_pixel_format());
 
+    let mut left_pattern_texture = texture_creator
+        .create_texture_target(None, 128, 128)
+        .unwrap();
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -367,6 +371,24 @@ fn main() -> Result<(), String> {
 
             println!("Tile generation duration: {:?}", duration);
 
+            canvas
+                .with_texture_canvas(&mut left_pattern_texture, |canvas| {
+                    for row in 0..16 {
+                        for col in 0..16 {
+                            let tile_number = row * 16 + col;
+
+                            canvas
+                                .copy(
+                                    &pattern_texture,
+                                    sdl2::rect::Rect::new(0, tile_number * 8, 8, 8),
+                                    sdl2::rect::Rect::new(col * 8, row * 8, 8, 8),
+                                )
+                                .unwrap();
+                        }
+                    }
+                })
+                .unwrap();
+
             let start_time = std::time::SystemTime::now();
             // let mut window_surface = window.surface(&event_pump).unwrap();
 
@@ -432,9 +454,15 @@ fn main() -> Result<(), String> {
                 .unwrap();
 
             canvas.set_draw_color(Color::GREEN);
-            canvas
-                .fill_rect(sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128))
-                .unwrap();
+            // canvas
+            //     .fill_rect(sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128))
+            //     .unwrap();
+
+            canvas.copy(
+                &left_pattern_texture,
+                None,
+                sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128),
+            );
             canvas
                 .fill_rect(sdl2::rect::Rect::new(
                     256 * SCALE as i32 + 150,
