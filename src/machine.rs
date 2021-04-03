@@ -14,11 +14,6 @@ pub enum SideEffect {
 
 #[derive(PartialEq, Eq)]
 pub struct Machine {
-    video_memory: VideoMemoryBuffer,
-    video_addr1: Option<u8>,
-    video_addr2: Option<u8>,
-    video_offset: u8,
-
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
@@ -35,11 +30,6 @@ impl Machine {
 
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
-            video_memory,
-            video_addr1: None,
-            video_addr2: None,
-            video_offset: 0,
-
             cycles: 0,
             cycle_counter: CycleCounter::power_on(),
 
@@ -54,31 +44,11 @@ impl Machine {
         match result.side_effect {
             Some(cpu::SideEffect::WritePpuAddr(address)) => {
                 self.ppu.write_address(address);
-
-                match (self.video_addr1, self.video_addr2) {
-                    (None, None) => self.video_addr1 = Some(address),
-                    (Some(_), None) => self.video_addr2 = Some(address),
-                    (Some(_), Some(_)) => {
-                        self.video_addr1 = Some(address);
-                        self.video_addr2 = None;
-                        self.video_offset = 0;
-                    }
-                    (None, Some(_)) => panic!("Unlikely 0x2006 condition"),
-                }
             }
             Some(cpu::SideEffect::WritePpuData(value)) => {
                 self.ppu.write_data(value);
-
-                match (self.video_addr1, self.video_addr2) {
-                    (Some(addr1), Some(addr2)) => {
-                        let address = u16::from_be_bytes([addr1, addr2]);
-                        self.video_memory[self.video_offset as usize + address as usize] = value;
-                        self.video_offset = self.video_offset.wrapping_add(1);
-                    }
-                    _ => panic!("Video registry error"),
-                }
             }
-            _ => {}
+            None => {}
         }
 
         match self.cycle_counter.advance(result.cycles_elapsed) {
