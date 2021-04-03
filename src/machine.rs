@@ -27,10 +27,11 @@ impl Machine {
         let rom = InesRom::load(file_path).ok().unwrap();
 
         let mut video_memory = [0; 0x4000];
-        video_memory[..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
+        video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
 
+        // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
-            video_memory: [0; 0x4000],
+            video_memory,
             video_addr1: None,
             video_addr2: None,
             video_offset: 0,
