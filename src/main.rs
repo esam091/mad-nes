@@ -13,7 +13,7 @@ mod machine;
 use cpu::MemoryBuffer;
 use machine::{Machine, VideoMemoryBuffer};
 use sdl2::{
-    pixels::{Palette, PixelFormat, PixelFormatEnum},
+    pixels::{Color, Palette, PixelFormat, PixelFormatEnum},
     render::{Texture, TextureCreator},
     surface::Surface,
 };
@@ -21,7 +21,7 @@ use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, Row, Table},
     Terminal,
 };
@@ -64,7 +64,10 @@ fn address_widget(buffer: &MemoryBuffer) -> Table {
     }
 
     let table = Table::new(rows)
-        .header(Row::new(Vec::from(TABLE_HEADERS)).style(Style::default().fg(Color::Yellow)))
+        .header(
+            Row::new(Vec::from(TABLE_HEADERS))
+                .style(Style::default().fg(tui::style::Color::Yellow)),
+        )
         .block(
             Block::default()
                 .title("Addresses")
@@ -89,7 +92,10 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     }
 
     let table = Table::new(rows)
-        .header(Row::new(Vec::from(TABLE_HEADERS)).style(Style::default().fg(Color::Yellow)))
+        .header(
+            Row::new(Vec::from(TABLE_HEADERS))
+                .style(Style::default().fg(tui::style::Color::Yellow)),
+        )
         .block(
             Block::default()
                 .title("Addresses")
@@ -101,7 +107,7 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     table
 }
 
-const SCALE: u32 = 3;
+const SCALE: u32 = 2;
 const PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80),
     (0x00, 0x3D, 0xA6),
@@ -233,7 +239,7 @@ fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("NES Emulator", 256 * SCALE, 240 * SCALE)
+        .window("NES Emulator", 256 * SCALE + 300, 240 * SCALE)
         .position_centered()
         .build()
         .unwrap();
@@ -293,6 +299,9 @@ fn main() -> Result<(), String> {
         let side_effect = machine.step();
 
         if let Some(side_effect) = side_effect {
+            canvas.set_draw_color(Color::GRAY);
+            canvas.clear();
+
             let video_buffer = machine.get_video_buffer();
 
             let color_set = (0..16)
@@ -414,7 +423,27 @@ fn main() -> Result<(), String> {
                 })
                 .unwrap();
 
-            canvas.copy(&gameplay_texture, None, None).unwrap();
+            canvas
+                .copy(
+                    &gameplay_texture,
+                    None,
+                    sdl2::rect::Rect::new(0, 0, 256 * SCALE, 240 * SCALE),
+                )
+                .unwrap();
+
+            canvas.set_draw_color(Color::GREEN);
+            canvas
+                .fill_rect(sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128))
+                .unwrap();
+            canvas
+                .fill_rect(sdl2::rect::Rect::new(
+                    256 * SCALE as i32 + 150,
+                    10,
+                    128,
+                    128,
+                ))
+                .unwrap();
+
             canvas.present();
 
             let duration = std::time::SystemTime::now()
