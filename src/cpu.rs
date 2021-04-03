@@ -43,6 +43,14 @@ impl Cpu {
         }
     }
 
+    pub fn enter_vblank(&mut self) {
+        self.memory[0x2002] |= 0x80;
+    }
+
+    pub fn exit_vblank(&mut self) {
+        self.memory[0x2002] &= !0x80;
+    }
+
     pub fn step(&mut self) -> CpuResult {
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {
@@ -53,6 +61,8 @@ impl Cpu {
                 )
             })
             .unwrap();
+
+        // println!("{:#04X?}", instruction);
 
         match instruction {
             Instruction::AndImmediate(value) => {

@@ -17,7 +17,7 @@ pub struct Machine {
     video_offset: u8,
 
     cycles: u32,
-
+    cycle_counter: CycleCounter,
     cpu: Cpu,
 }
 
@@ -36,6 +36,7 @@ impl Machine {
             video_offset: 0,
 
             cycles: 0,
+            cycle_counter: CycleCounter::power_on(),
 
             cpu: Cpu::load(&rom),
         });
@@ -62,7 +63,7 @@ impl Machine {
                     (Some(addr1), Some(addr2)) => {
                         let address = u16::from_be_bytes([addr1, addr2]);
                         self.video_memory[self.video_offset as usize + address as usize] = value;
-                        self.video_offset += 1;
+                        self.video_offset = self.video_offset.wrapping_add(1);
                     }
                     _ => panic!("Video registry error"),
                 }
@@ -70,15 +71,21 @@ impl Machine {
             _ => {}
         }
 
-        self.cycles += result.cycles_elapsed;
+        match self.cycle_counter.advance(result.cycles_elapsed) {
+            Some(CycleOutput::EnterVblank) => {
+                self.cpu.enter_vblank();
+                return Some(SideEffect::Render);
+            }
 
-        if self.cycles >= 3000 {
-            self.cycles %= 3000;
+            Some(CycleOutput::ExitVblank) => {
+                self.cpu.exit_vblank();
+                return None;
+            }
 
-            return Some(SideEffect::Render);
+            _ => {
+                return None;
+            }
         }
-
-        None
     }
 
     pub fn get_buffer(&self) -> &MemoryBuffer {
@@ -87,5 +94,105 @@ impl Machine {
 
     pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {
         &self.video_memory
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+pub enum CycleOutput {
+    EnterVblank,
+    ExitVblank,
+}
+
+#[derive(Eq, PartialEq)]
+pub struct CycleCounter {
+    state: CycleState,
+    cycles: u32,
+}
+
+impl CycleCounter {
+    pub fn advance(&mut self, cycles: u32) -> Option<CycleOutput> {
+        self.cycles += cycles;
+
+        if self.cycles >= self.state.num_cycles() {
+            self.cycles %= self.state.num_cycles();
+
+            match self.state {
+                CycleState::Rendering => {
+                    self.state = CycleState::Vblank;
+                    return Some(CycleOutput::EnterVblank);
+                }
+
+                CycleState::Vblank => {
+                    self.state = CycleState::Rendering;
+                    return Some(CycleOutput::ExitVblank);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn power_on() -> CycleCounter {
+        CycleCounter {
+            state: CycleState::Rendering,
+            cycles: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+enum CycleState {
+    Rendering,
+    Vblank,
+}
+
+impl CycleState {
+    fn num_cycles(&self) -> u32 {
+        match self {
+            &CycleState::Rendering => 27280,
+            &CycleState::Vblank => 2273,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn starting_state() {
+        let mut counter = CycleCounter {
+            state: CycleState::Rendering,
+            cycles: 0,
+        };
+
+        let output = counter.advance(8);
+        assert_eq!(output, None);
+        assert_eq!(counter.state, CycleState::Rendering);
+        assert_eq!(counter.cycles, 8);
+    }
+
+    #[test]
+    fn enter_vblank() {
+        let mut counter = CycleCounter {
+            state: CycleState::Rendering,
+            cycles: 27278,
+        };
+
+        let output = counter.advance(3);
+        assert_eq!(output, Some(CycleOutput::EnterVblank));
+        assert_eq!(counter.state, CycleState::Vblank);
+        assert_eq!(counter.cycles, 1);
+    }
+
+    #[test]
+    fn exit_vblank() {
+        let mut counter = CycleCounter {
+            state: CycleState::Vblank,
+            cycles: 2270,
+        };
+
+        let output = counter.advance(4);
+        assert_eq!(output, Some(CycleOutput::ExitVblank));
+        assert_eq!(counter.state, CycleState::Rendering);
+        assert_eq!(counter.cycles, 1);
     }
 }
