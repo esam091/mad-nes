@@ -1,7 +1,10 @@
 use std::u8;
 
-use crate::cpu::{self, Cpu, MemoryBuffer};
 use crate::ines::InesRom;
+use crate::{
+    cpu::{self, Cpu, MemoryBuffer},
+    ppu::Ppu,
+};
 
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
@@ -19,6 +22,7 @@ pub struct Machine {
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
+    ppu: Ppu,
 }
 
 impl Machine {
@@ -40,6 +44,7 @@ impl Machine {
             cycle_counter: CycleCounter::power_on(),
 
             cpu: Cpu::load(&rom),
+            ppu: Ppu::new(video_memory),
         });
     }
 
@@ -48,6 +53,8 @@ impl Machine {
 
         match result.side_effect {
             Some(cpu::SideEffect::WritePpuAddr(address)) => {
+                self.ppu.write_address(address);
+
                 match (self.video_addr1, self.video_addr2) {
                     (None, None) => self.video_addr1 = Some(address),
                     (Some(_), None) => self.video_addr2 = Some(address),
@@ -60,6 +67,8 @@ impl Machine {
                 }
             }
             Some(cpu::SideEffect::WritePpuData(value)) => {
+                self.ppu.write_data(value);
+
                 match (self.video_addr1, self.video_addr2) {
                     (Some(addr1), Some(addr2)) => {
                         let address = u16::from_be_bytes([addr1, addr2]);
@@ -94,7 +103,7 @@ impl Machine {
     }
 
     pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {
-        &self.video_memory
+        &self.ppu.get_buffer()
     }
 }
 

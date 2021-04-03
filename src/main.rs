@@ -9,6 +9,7 @@ mod cpu;
 mod ines;
 mod instruction;
 mod machine;
+mod ppu;
 
 use cpu::MemoryBuffer;
 use machine::{Machine, VideoMemoryBuffer};
