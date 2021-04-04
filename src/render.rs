@@ -143,26 +143,9 @@ struct PatternBank<'r> {
 impl<'r> PatternBank<'r> {
     fn new(
         pattern_table: &[u8],
-        color_palette: &ColorPalette,
+        color_sets: &Vec<Palette>,
         texture_creator: &'r TextureCreator<WindowContext>,
     ) -> PatternBank<'r> {
-        let palettes: Vec<Palette> = (0..4)
-            .map(|set_index| {
-                let color_set = color_palette.color_set;
-                let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
-
-                let set = color_set[set_index as usize];
-
-                for color_index in 0..3 {
-                    let palette_index = set[color_index as usize];
-                    let (r, g, b) = PALETTE[palette_index as usize];
-                    colors.push(Color::RGB(r, g, b));
-                }
-
-                Palette::with_colors(&colors).unwrap()
-            })
-            .collect();
-
         /*
         Generate the pattern tiles.
         The tiles are arranged vertically and also grouped in sets.
@@ -192,7 +175,9 @@ impl<'r> PatternBank<'r> {
             .map(|set_number| {
                 let mut pattern_surface =
                     Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
-                pattern_surface.set_palette(&palettes[set_number]).unwrap();
+                pattern_surface
+                    .set_palette(&color_sets[set_number])
+                    .unwrap();
 
                 let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
                 pattern_surface_raw.copy_from_slice(&raw_bytes);
@@ -256,6 +241,27 @@ impl<'r> PatternBank<'r> {
     }
 }
 
+fn create_sdl_palette(color_palette: &ColorPalette) -> Vec<Palette> {
+    let palettes: Vec<Palette> = (0..4)
+        .map(|set_index| {
+            let color_set = color_palette.color_set;
+            let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
+
+            let set = color_set[set_index as usize];
+
+            for color_index in 0..3 {
+                let palette_index = set[color_index as usize];
+                let (r, g, b) = PALETTE[palette_index as usize];
+                colors.push(Color::RGB(r, g, b));
+            }
+
+            Palette::with_colors(&colors).unwrap()
+        })
+        .collect();
+
+    palettes
+}
+
 pub struct Renderer<'a> {
     canvas: Canvas<Window>,
 
@@ -263,6 +269,7 @@ pub struct Renderer<'a> {
     debug_texture: Texture<'a>,
     gameplay_texture: Texture<'a>,
     left_pattern_texture: Texture<'a>,
+    right_pattern_texture: Texture<'a>,
 }
 
 impl<'a> Renderer<'a> {
@@ -280,12 +287,17 @@ impl<'a> Renderer<'a> {
             .create_texture_target(None, 128, 128)
             .unwrap();
 
+        let right_pattern_texture = texture_creator
+            .create_texture_target(None, 128, 128)
+            .unwrap();
+
         Renderer {
             canvas,
             texture_creator,
             debug_texture,
             gameplay_texture,
             left_pattern_texture,
+            right_pattern_texture,
         }
     }
 
@@ -295,14 +307,15 @@ impl<'a> Renderer<'a> {
 
         let video_buffer = ppu.get_buffer();
 
-        let color_palette = ppu.get_color_palette();
+        let color_sets = create_sdl_palette(&ppu.get_color_palette());
 
         let start_time = std::time::SystemTime::now();
 
-        let pattern_table = ppu.left_pattern_table();
-
         let left_pattern_bank =
-            PatternBank::new(pattern_table, &color_palette, self.texture_creator);
+            PatternBank::new(ppu.left_pattern_table(), &color_sets, self.texture_creator);
+
+        let right_pattern_bank =
+            PatternBank::new(ppu.right_pattern_table(), &color_sets, self.texture_creator);
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
@@ -314,6 +327,15 @@ impl<'a> Renderer<'a> {
 
         self.canvas
             .with_texture_canvas(&mut self.left_pattern_texture, |canvas| {
+                canvas.copy(&pattern_texture, None, None).unwrap();
+            })
+            .unwrap();
+
+        let pattern_texture =
+            right_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
+
+        self.canvas
+            .with_texture_canvas(&mut self.right_pattern_texture, |canvas| {
                 canvas.copy(&pattern_texture, None, None).unwrap();
             })
             .unwrap();
@@ -373,8 +395,6 @@ impl<'a> Renderer<'a> {
             )
             .unwrap();
 
-        self.canvas.set_draw_color(Color::GREEN);
-
         self.canvas
             .copy(
                 &self.left_pattern_texture,
@@ -384,12 +404,11 @@ impl<'a> Renderer<'a> {
             .unwrap();
 
         self.canvas
-            .fill_rect(sdl2::rect::Rect::new(
-                256 * SCALE as i32 + 150,
-                10,
-                128,
-                128,
-            ))
+            .copy(
+                &self.right_pattern_texture,
+                None,
+                Rect::new(256 * SCALE as i32 + 150, 10, 128, 128),
+            )
             .unwrap();
 
         self.canvas.present();
