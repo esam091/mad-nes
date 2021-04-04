@@ -41,17 +41,30 @@ impl Machine {
     pub fn step(&mut self) -> Option<SideEffect> {
         let result = self.cpu.step();
 
-        if let Some(e) = &result.side_effect {
-            println!("side effect {:#04X?}", e);
-        }
-        match result.side_effect {
-            Some(cpu::SideEffect::WritePpuAddr(address)) => {
-                self.ppu.write_address(address);
+        if let Some(side_effect) = result.side_effect {
+            println!("side effect {:#04X?}", side_effect);
+
+            match side_effect {
+                cpu::SideEffect::WritePpuAddr(address) => {
+                    self.ppu.write_address(address);
+                }
+                cpu::SideEffect::WritePpuData(value) => {
+                    self.ppu.write_data(value);
+                }
+
+                cpu::SideEffect::WriteOamAddr(address) => {
+                    self.ppu.set_oam_address(address);
+                }
+                cpu::SideEffect::WriteOamData(data) => {
+                    self.ppu.write_oam_data(data);
+                }
+                cpu::SideEffect::OamDma(byte) => {
+                    let starting_address = byte as usize * 0x100;
+                    let slice =
+                        &self.cpu.get_memory_buffer()[starting_address..=starting_address + 0xff];
+                    self.ppu.copy_oam_data(slice);
+                }
             }
-            Some(cpu::SideEffect::WritePpuData(value)) => {
-                self.ppu.write_data(value);
-            }
-            None => {}
         }
 
         match self.cycle_counter.advance(result.cycles_elapsed) {

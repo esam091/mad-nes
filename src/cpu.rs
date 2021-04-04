@@ -8,6 +8,9 @@ pub type MemoryBuffer = [u8; 0x10000];
 pub enum SideEffect {
     WritePpuAddr(u8),
     WritePpuData(u8),
+    WriteOamAddr(u8),
+    WriteOamData(u8),
+    OamDma(u8),
 }
 
 pub struct CpuResult {
@@ -39,6 +42,9 @@ impl Cpu {
         self.memory[address as usize] = value;
 
         match address {
+            0x2003 => Some(SideEffect::WriteOamAddr(value)),
+            0x2004 => Some(SideEffect::WriteOamData(value)),
+            0x4014 => Some(SideEffect::OamDma(value)),
             0x2006 => Some(SideEffect::WritePpuAddr(value)),
             0x2007 => Some(SideEffect::WritePpuData(value)),
             _ => None,
