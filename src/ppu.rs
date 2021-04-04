@@ -11,7 +11,7 @@ pub struct Ppu {
     memory: VideoMemoryBuffer,
     current_address: u16,
     address_latch: AddressLatch,
-    low_address_byte: u8,
+    high_address_byte: u8,
 }
 
 pub struct ColorPalette {
@@ -25,7 +25,7 @@ impl Ppu {
             memory,
             current_address: 0,
             address_latch: AddressLatch::High,
-            low_address_byte: 0,
+            high_address_byte: 0,
         }
     }
 
@@ -38,12 +38,12 @@ impl Ppu {
         match self.address_latch {
             AddressLatch::High => {
                 self.address_latch = AddressLatch::Low;
-                self.current_address = u16::from_le_bytes([self.low_address_byte, byte]);
+                self.high_address_byte = byte;
             }
 
             AddressLatch::Low => {
                 self.address_latch = AddressLatch::High;
-                self.low_address_byte = byte;
+                self.current_address = u16::from_le_bytes([byte, self.high_address_byte]);
             }
         }
     }
