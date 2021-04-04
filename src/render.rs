@@ -135,6 +135,12 @@ fn create_debug_texture<T>(
 
 const SCALE: u32 = 2;
 
+struct PatternBank {}
+
+impl PatternBank {
+    // fn new(buffer: &u8) -> PatternBank {}
+}
+
 pub struct Renderer<'a> {
     canvas: Canvas<Window>,
 
@@ -174,21 +180,23 @@ impl<'a> Renderer<'a> {
 
         let video_buffer = ppu.get_buffer();
 
-        let color_set = (0..16)
-            .map(|index| {
-                let palette_index = if index % 4 == 0 {
-                    video_buffer[0x3f00]
-                } else {
-                    video_buffer[0x3f00 + index]
-                };
+        let asdf = ppu.get_color_palette();
+        let palettes: Vec<Palette> = (0..4)
+            .map(|set_index| {
+                let color_set = asdf.color_set;
+                let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
 
-                let (r, g, b) = PALETTE[palette_index as usize];
+                let set = color_set[set_index as usize];
 
-                Color::RGB(r, g, b)
+                for color_index in 0..3 {
+                    let palette_index = set[color_index as usize];
+                    let (r, g, b) = PALETTE[palette_index as usize];
+                    colors.push(Color::RGB(r, g, b));
+                }
+
+                Palette::with_colors(&colors).unwrap()
             })
-            .collect::<Vec<_>>();
-
-        let palette_set = Palette::with_colors(&color_set).unwrap();
+            .collect();
 
         /*
         Generate the pattern tiles.
@@ -197,9 +205,9 @@ impl<'a> Renderer<'a> {
         (0, 8) -> (7, 15): Tile 0 pallette set 1
         (0, 2048) -> (7, 2055): Tile 0 pallette set 2
         */
-        let mut pattern_surface = Surface::new(8, 256 * 8 * 4, PixelFormatEnum::Index8).unwrap();
-        pattern_surface.set_palette(&palette_set).unwrap();
-        let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
+
+        let start_time = std::time::SystemTime::now();
+        let mut raw_bytes = [0u8; 256 * 8 * 8];
 
         let pattern_table = ppu.left_pattern_table();
         for index in 0..256 {
@@ -213,18 +221,33 @@ impl<'a> Renderer<'a> {
                     let palette_value = palette_number(left_bits, right_bits, col);
 
                     // fill each palette set
-                    pattern_surface_raw[row * 8 + col + index * 64] = palette_value;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 2048 * 8] = palette_value + 4;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 4096 * 8] = palette_value + 8;
-                    pattern_surface_raw[row * 8 + col + index * 64 + 6144 * 8] = palette_value + 12;
+                    raw_bytes[row * 8 + col + index * 64] = palette_value;
                 }
             }
         }
 
-        let pattern_texture = self
-            .texture_creator
-            .create_texture_from_surface(pattern_surface)
+        let textures: Vec<Texture> = (0..4)
+            .map(|set_number| {
+                let mut pattern_surface =
+                    Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
+                pattern_surface.set_palette(&palettes[set_number]).unwrap();
+
+                let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
+                pattern_surface_raw.copy_from_slice(&raw_bytes);
+
+                let pattern_texture = self
+                    .texture_creator
+                    .create_texture_from_surface(pattern_surface)
+                    .unwrap();
+
+                pattern_texture
+            })
+            .collect();
+
+        let duration = std::time::SystemTime::now()
+            .duration_since(start_time)
             .unwrap();
+        println!("Tile generation duration: {:?}", duration);
 
         self.canvas
             .with_texture_canvas(&mut self.left_pattern_texture, |canvas| {
@@ -234,7 +257,7 @@ impl<'a> Renderer<'a> {
 
                         canvas
                             .copy(
-                                &pattern_texture,
+                                &textures[0],
                                 sdl2::rect::Rect::new(0, tile_number * 8, 8, 8),
                                 sdl2::rect::Rect::new(col * 8, row * 8, 8, 8),
                             )
@@ -280,13 +303,8 @@ impl<'a> Renderer<'a> {
 
                         canvas
                             .copy(
-                                &pattern_texture,
-                                sdl2::rect::Rect::new(
-                                    0,
-                                    nametable_value as i32 * 8 + 2048 * palette_set_index as i32,
-                                    8,
-                                    8,
-                                ),
+                                &textures[palette_set_index as usize],
+                                sdl2::rect::Rect::new(0, nametable_value as i32 * 8, 8, 8),
                                 sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
                             )
                             .unwrap();

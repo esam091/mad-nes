@@ -16,10 +16,7 @@ pub struct Ppu {
 
 pub struct ColorPalette {
     pub background: u8,
-    pub set_1: (u8, u8, u8),
-    pub set_2: (u8, u8, u8),
-    pub set_3: (u8, u8, u8),
-    pub set_4: (u8, u8, u8),
+    pub color_set: [[u8; 3]; 4],
 }
 
 impl Ppu {
@@ -66,26 +63,28 @@ impl Ppu {
     pub fn get_color_palette(&self) -> ColorPalette {
         ColorPalette {
             background: self.memory[0x3f00],
-            set_1: (
-                self.memory[0x3f01],
-                self.memory[0x3f02],
-                self.memory[0x3f03],
-            ),
-            set_2: (
-                self.memory[0x3f05],
-                self.memory[0x3f06],
-                self.memory[0x3f07],
-            ),
-            set_3: (
-                self.memory[0x3f09],
-                self.memory[0x3f0a],
-                self.memory[0x3f0b],
-            ),
-            set_4: (
-                self.memory[0x3f0d],
-                self.memory[0x3f0e],
-                self.memory[0x3f0f],
-            ),
+            color_set: [
+                [
+                    self.memory[0x3f01],
+                    self.memory[0x3f02],
+                    self.memory[0x3f03],
+                ],
+                [
+                    self.memory[0x3f05],
+                    self.memory[0x3f06],
+                    self.memory[0x3f07],
+                ],
+                [
+                    self.memory[0x3f09],
+                    self.memory[0x3f0a],
+                    self.memory[0x3f0b],
+                ],
+                [
+                    self.memory[0x3f0d],
+                    self.memory[0x3f0e],
+                    self.memory[0x3f0f],
+                ],
+            ],
         }
     }
 }
