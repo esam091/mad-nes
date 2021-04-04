@@ -75,6 +75,10 @@ impl Machine {
     pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {
         &self.ppu.get_buffer()
     }
+
+    pub fn get_ppu(&self) -> &Ppu {
+        &self.ppu
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
