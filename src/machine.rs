@@ -41,6 +41,9 @@ impl Machine {
     pub fn step(&mut self) -> Option<SideEffect> {
         let result = self.cpu.step();
 
+        if let Some(e) = &result.side_effect {
+            println!("side effect {:#04X?}", e);
+        }
         match result.side_effect {
             Some(cpu::SideEffect::WritePpuAddr(address)) => {
                 self.ppu.write_address(address);
