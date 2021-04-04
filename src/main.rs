@@ -8,7 +8,8 @@ mod ppu;
 mod render;
 
 use cpu::MemoryBuffer;
-use machine::{Machine, VideoMemoryBuffer};
+use machine::Machine;
+use ppu::VideoMemoryBuffer;
 use render::Renderer;
 
 use termion::raw::IntoRawMode;

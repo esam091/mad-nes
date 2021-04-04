@@ -40,7 +40,7 @@ impl Machine {
         let result = self.cpu.step();
 
         if let Some(side_effect) = result.side_effect {
-            println!("side effect {:#04X?}", side_effect);
+            // println!("side effect {:#04X?}", side_effect);
 
             match side_effect {
                 cpu::SideEffect::WritePpuAddr(address) => {
