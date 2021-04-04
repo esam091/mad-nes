@@ -2,7 +2,8 @@ use std::{convert::TryInto, ops::BitAnd};
 
 use sdl2::{
     pixels::{Color, Palette, PixelFormatEnum},
-    render::Texture,
+    rect::Rect,
+    render::{Texture, WindowCanvas},
     surface::Surface,
     video::Window,
 };
@@ -11,7 +12,7 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::Ppu;
+use crate::ppu::{ColorPalette, Ppu};
 
 const PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80),
@@ -135,10 +136,124 @@ fn create_debug_texture<T>(
 
 const SCALE: u32 = 2;
 
-struct PatternBank {}
+struct PatternBank<'r> {
+    textures: Vec<Texture<'r>>,
+}
 
-impl PatternBank {
-    // fn new(buffer: &u8) -> PatternBank {}
+impl<'r> PatternBank<'r> {
+    fn new(
+        pattern_table: &[u8],
+        color_palette: &ColorPalette,
+        texture_creator: &'r TextureCreator<WindowContext>,
+    ) -> PatternBank<'r> {
+        let palettes: Vec<Palette> = (0..4)
+            .map(|set_index| {
+                let color_set = color_palette.color_set;
+                let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
+
+                let set = color_set[set_index as usize];
+
+                for color_index in 0..3 {
+                    let palette_index = set[color_index as usize];
+                    let (r, g, b) = PALETTE[palette_index as usize];
+                    colors.push(Color::RGB(r, g, b));
+                }
+
+                Palette::with_colors(&colors).unwrap()
+            })
+            .collect();
+
+        /*
+        Generate the pattern tiles.
+        The tiles are arranged vertically and also grouped in sets.
+        (0, 0) -> (7, 7): Tile 0 palette set 1
+        (0, 8) -> (7, 15): Tile 0 pallette set 1
+        (0, 2048) -> (7, 2055): Tile 0 pallette set 2
+        */
+
+        let mut raw_bytes = [0u8; 256 * 8 * 8];
+        for index in 0..256 {
+            let address = index * 0x10;
+
+            for row in 0..8 {
+                let left_bits = pattern_table[address + row];
+                let right_bits = pattern_table[address + row + 8];
+
+                for col in 0..8 {
+                    let palette_value = palette_number(left_bits, right_bits, col);
+
+                    // fill each palette set
+                    raw_bytes[row * 8 + col + index * 64] = palette_value;
+                }
+            }
+        }
+
+        let textures: Vec<Texture> = (0..4)
+            .map(|set_number| {
+                let mut pattern_surface =
+                    Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
+                pattern_surface.set_palette(&palettes[set_number]).unwrap();
+
+                let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
+                pattern_surface_raw.copy_from_slice(&raw_bytes);
+
+                let pattern_texture = texture_creator
+                    .create_texture_from_surface(pattern_surface)
+                    .unwrap();
+
+                pattern_texture
+            })
+            .collect();
+
+        PatternBank { textures }
+    }
+
+    fn render_tile(
+        &self,
+        canvas: &mut WindowCanvas,
+        nametable_value: u8,
+        attribute_value: u8,
+        dst: Rect,
+    ) {
+        canvas
+            .copy(
+                &self.textures[attribute_value as usize],
+                Rect::new(0, nametable_value as i32 * 8, 8, 8),
+                dst,
+            )
+            .unwrap();
+    }
+
+    fn create_debug_texture(
+        &self,
+        canvas: &mut WindowCanvas,
+        texture_creator: &'r TextureCreator<WindowContext>,
+        palette_set_index: u8,
+    ) -> Texture<'r> {
+        let mut texture = texture_creator
+            .create_texture_target(None, 128, 128)
+            .unwrap();
+
+        canvas
+            .with_texture_canvas(&mut texture, |canvas| {
+                for row in 0..16 {
+                    for col in 0..16 {
+                        let tile_number = row * 16 + col;
+
+                        canvas
+                            .copy(
+                                &self.textures[palette_set_index as usize],
+                                Rect::new(0, tile_number * 8, 8, 8),
+                                Rect::new(col * 8, row * 8, 8, 8),
+                            )
+                            .unwrap();
+                    }
+                }
+            })
+            .unwrap();
+
+        texture
+    }
 }
 
 pub struct Renderer<'a> {
@@ -180,90 +295,26 @@ impl<'a> Renderer<'a> {
 
         let video_buffer = ppu.get_buffer();
 
-        let asdf = ppu.get_color_palette();
-        let palettes: Vec<Palette> = (0..4)
-            .map(|set_index| {
-                let color_set = asdf.color_set;
-                let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
-
-                let set = color_set[set_index as usize];
-
-                for color_index in 0..3 {
-                    let palette_index = set[color_index as usize];
-                    let (r, g, b) = PALETTE[palette_index as usize];
-                    colors.push(Color::RGB(r, g, b));
-                }
-
-                Palette::with_colors(&colors).unwrap()
-            })
-            .collect();
-
-        /*
-        Generate the pattern tiles.
-        The tiles are arranged vertically and also grouped in sets.
-        (0, 0) -> (7, 7): Tile 0 palette set 1
-        (0, 8) -> (7, 15): Tile 0 pallette set 1
-        (0, 2048) -> (7, 2055): Tile 0 pallette set 2
-        */
+        let color_palette = ppu.get_color_palette();
 
         let start_time = std::time::SystemTime::now();
-        let mut raw_bytes = [0u8; 256 * 8 * 8];
 
         let pattern_table = ppu.left_pattern_table();
-        for index in 0..256 {
-            let address = index * 0x10;
 
-            for row in 0..8 {
-                let left_bits = pattern_table[address + row];
-                let right_bits = pattern_table[address + row + 8];
-
-                for col in 0..8 {
-                    let palette_value = palette_number(left_bits, right_bits, col);
-
-                    // fill each palette set
-                    raw_bytes[row * 8 + col + index * 64] = palette_value;
-                }
-            }
-        }
-
-        let textures: Vec<Texture> = (0..4)
-            .map(|set_number| {
-                let mut pattern_surface =
-                    Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
-                pattern_surface.set_palette(&palettes[set_number]).unwrap();
-
-                let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
-                pattern_surface_raw.copy_from_slice(&raw_bytes);
-
-                let pattern_texture = self
-                    .texture_creator
-                    .create_texture_from_surface(pattern_surface)
-                    .unwrap();
-
-                pattern_texture
-            })
-            .collect();
+        let left_pattern_bank =
+            PatternBank::new(pattern_table, &color_palette, self.texture_creator);
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
             .unwrap();
         println!("Tile generation duration: {:?}", duration);
 
+        let pattern_texture =
+            left_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
+
         self.canvas
             .with_texture_canvas(&mut self.left_pattern_texture, |canvas| {
-                for row in 0..16 {
-                    for col in 0..16 {
-                        let tile_number = row * 16 + col;
-
-                        canvas
-                            .copy(
-                                &textures[0],
-                                sdl2::rect::Rect::new(0, tile_number * 8, 8, 8),
-                                sdl2::rect::Rect::new(col * 8, row * 8, 8, 8),
-                            )
-                            .unwrap();
-                    }
-                }
+                canvas.copy(&pattern_texture, None, None).unwrap();
             })
             .unwrap();
 
@@ -301,13 +352,12 @@ impl<'a> Renderer<'a> {
                         let xx: i32 = col.try_into().unwrap();
                         let yy: i32 = row.try_into().unwrap();
 
-                        canvas
-                            .copy(
-                                &textures[palette_set_index as usize],
-                                sdl2::rect::Rect::new(0, nametable_value as i32 * 8, 8, 8),
-                                sdl2::rect::Rect::new(xx * 8, yy * 8, 8, 8),
-                            )
-                            .unwrap();
+                        left_pattern_bank.render_tile(
+                            canvas,
+                            nametable_value,
+                            palette_set_index,
+                            Rect::new(xx * 8, yy * 8, 8, 8),
+                        );
                     }
                 }
 
