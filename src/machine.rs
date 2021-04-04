@@ -1,12 +1,10 @@
 use std::u8;
 
-use crate::ines::InesRom;
 use crate::{
     cpu::{self, Cpu, MemoryBuffer},
     ppu::Ppu,
 };
-
-pub type VideoMemoryBuffer = [u8; 0x4000];
+use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
 
 pub enum SideEffect {
     Render,
