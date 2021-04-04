@@ -55,6 +55,14 @@ impl Ppu {
         &self.memory
     }
 
+    pub fn left_pattern_table(&self) -> &[u8] {
+        &self.memory[0..0x1000]
+    }
+
+    pub fn right_pattern_table(&self) -> &[u8] {
+        &self.memory[0x1000..0x2000]
+    }
+
     pub fn get_color_palette(&self) -> ColorPalette {
         ColorPalette {
             background: self.memory[0x3f00],

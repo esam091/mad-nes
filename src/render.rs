@@ -201,12 +201,13 @@ impl<'a> Renderer<'a> {
         pattern_surface.set_palette(&palette_set).unwrap();
         let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
 
+        let pattern_table = ppu.left_pattern_table();
         for index in 0..256 {
             let address = index * 0x10;
 
             for row in 0..8 {
-                let left_bits = video_buffer[address + row];
-                let right_bits = video_buffer[address + row + 8];
+                let left_bits = pattern_table[address + row];
+                let right_bits = pattern_table[address + row + 8];
 
                 for col in 0..8 {
                     let palette_value = palette_number(left_bits, right_bits, col);
