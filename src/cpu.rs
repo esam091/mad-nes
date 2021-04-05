@@ -1612,7 +1612,7 @@ impl Cpu {
             x: 0,
             y: 0,
             p: 0x24,
-            sp: 0xfd,
+            sp: 0xff,
         }
     }
 
@@ -1661,6 +1661,7 @@ mod test {
 
         // starting point according to the nestest guide
         cpu.pc = 0xc000;
+        cpu.sp = 0xfd;
 
         for line in lines {
             let trimmed_line = format!("{} {} {}", &line[..4], &line[48..73], &line[86..]);
