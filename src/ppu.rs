@@ -15,6 +15,7 @@ pub struct Ppu {
 
     current_oam_address: u8,
     oam_data: [u8; 256],
+    control_flag: u8,
 }
 
 pub struct ColorPalette {
@@ -31,7 +32,16 @@ impl Ppu {
             high_address_byte: 0,
             current_oam_address: 0,
             oam_data: [0; 256],
+            control_flag: 0,
         }
+    }
+
+    pub fn set_control_flag(&mut self, value: u8) {
+        self.control_flag = value;
+    }
+
+    pub fn clear_address_latch(&mut self) {
+        self.address_latch = AddressLatch::High;
     }
 
     pub fn set_oam_address(&mut self, address: u8) {
@@ -44,7 +54,12 @@ impl Ppu {
 
     pub fn write_data(&mut self, data: u8) {
         self.memory[self.current_address as usize] = data;
-        self.current_address = self.current_address.wrapping_add(1);
+
+        if self.control_flag & 0b00000100 != 0 {
+            self.current_address = self.current_address.wrapping_add(32);
+        } else {
+            self.current_address = self.current_address.wrapping_add(1);
+        }
     }
 
     pub fn copy_oam_data(&mut self, data: &[u8]) {

@@ -11,6 +11,8 @@ pub enum SideEffect {
     WriteOamAddr(u8),
     WriteOamData(u8),
     OamDma(u8),
+    ClearAddressLatch,
+    SetPpuControl(u8),
 }
 
 pub struct CpuResult {
@@ -51,6 +53,7 @@ impl Cpu {
             0x4014 => Some(SideEffect::OamDma(value)),
             0x2006 => Some(SideEffect::WritePpuAddr(value)),
             0x2007 => Some(SideEffect::WritePpuData(value)),
+            0x2000 => Some(SideEffect::SetPpuControl(value)),
             _ => None,
         }
     }
@@ -629,6 +632,13 @@ impl Cpu {
                 self.a = self.memory[address as usize];
                 self.toggle_zero_negative_flag(self.a);
 
+                if address == 0x2002 {
+                    self.memory[0x2002] &= !0x80;
+                    return CpuResult {
+                        cycles_elapsed: 4,
+                        side_effect: Some(SideEffect::ClearAddressLatch),
+                    };
+                }
                 cycles(4)
             }
 
