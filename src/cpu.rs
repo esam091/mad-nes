@@ -34,6 +34,10 @@ pub struct Cpu {
     y: u8,
     p: u8,
     sp: u8,
+
+    nmi_vector: u16,
+    reset_vector: u16,
+    irq_vector: u16,
 }
 
 impl Cpu {
@@ -53,6 +57,16 @@ impl Cpu {
 
     pub fn enter_vblank(&mut self) {
         self.memory[0x2002] |= 0x80;
+
+        if self.memory[0x2000] & 0x80 != 0 {
+            println!("Enter vblank");
+
+            let addresses = self.pc.to_le_bytes();
+            self.push(addresses[1]);
+            self.push(addresses[0]);
+            self.push(self.p.bitand(!(1 << 5)));
+            self.pc = self.nmi_vector;
+        }
     }
 
     pub fn exit_vblank(&mut self) {
@@ -1467,14 +1481,13 @@ impl Cpu {
     }
 
     fn adc(&mut self, value: u8) {
-        let (result, carry) = self
-            .a
-            .overflowing_add(value + self.is_carry_flag_on() as u8); // maybe we should check for second carry?
+        let (result2, carry2) = value.overflowing_add(self.is_carry_flag_on() as u8);
+        let (result, carry) = self.a.overflowing_add(result2);
         let (_, overflow) = (self.a as i8).overflowing_add(value as i8); // also check for overflow with carry?
 
         self.a = result;
         self.toggle_zero_negative_flag(self.a);
-        self.set_carry_flag(carry);
+        self.set_carry_flag(carry || carry2);
         self.set_overflow_flag(overflow);
     }
 
@@ -1613,6 +1626,9 @@ impl Cpu {
             y: 0,
             p: 0x24,
             sp: 0xff,
+            nmi_vector: 0,
+            reset_vector: 0,
+            irq_vector: 0,
         }
     }
 
@@ -1625,9 +1641,22 @@ impl Cpu {
         }
 
         // jump to reset vector
-        let initial_address = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
+        let reset_vector = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
+        let nmi_vector = u16::from_le_bytes([memory[0xfffa], memory[0xfffb]]);
+        let irq_vector = u16::from_le_bytes([memory[0xfffe], memory[0xffff]]);
 
-        return Cpu::new(memory, initial_address);
+        Cpu {
+            memory,
+            pc: reset_vector,
+            a: 0,
+            x: 0,
+            y: 0,
+            p: 0x24,
+            sp: 0xff,
+            nmi_vector,
+            reset_vector,
+            irq_vector,
+        }
     }
 
     pub fn get_memory_buffer(&self) -> &MemoryBuffer {

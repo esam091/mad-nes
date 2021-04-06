@@ -93,6 +93,10 @@ impl Machine {
     pub fn get_ppu(&self) -> &Ppu {
         &self.ppu
     }
+
+    pub fn get_cpu(&self) -> &Cpu {
+        &self.cpu
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]

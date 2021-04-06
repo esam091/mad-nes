@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io};
 
 mod cpu;
 mod ines;
@@ -48,7 +48,7 @@ static TABLE_HEADERS: [&'static str; 17] = [
 
 fn address_widget(buffer: &MemoryBuffer) -> Table {
     let mut rows = Vec::<Row>::new();
-    for address in (0x2000..=0x2100).step_by(16) {
+    for address in (0x0000..=0x0200).step_by(16) {
         let mut content = vec![format!("{:#04X?}", address)];
 
         for offset in 0..=0xf {
@@ -152,8 +152,11 @@ fn main() -> Result<(), String> {
         //             .constraints([Constraint::Percentage(100)].as_ref())
         //             .split(f.size());
 
-        //         // f.render_widget(address_widget(machine.get_buffer()), chunks[0]);
-        //         f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
+        //         f.render_widget(
+        //             address_widget(machine.get_cpu().get_memory_buffer()),
+        //             chunks[0],
+        //         );
+        //         // f.render_widget(video_ram_widget(machine.get_video_buffer()), chunks[0]);
         //     })
         //     .map_err(|_| "Failed drawing terminal")?;
 
@@ -168,7 +171,7 @@ fn main() -> Result<(), String> {
                 .duration_since(start_time)
                 .unwrap();
 
-            println!("Render duration: {:?}", duration);
+            // println!("Render duration: {:?}", duration);
 
             // std::thread::sleep(Duration::from_millis(3));
         }
