@@ -12,7 +12,7 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::{ColorPalette, Ppu};
+use crate::ppu::{ColorPalette, PatternTableSelection, Ppu};
 
 const PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80),
@@ -342,6 +342,11 @@ impl<'a> Renderer<'a> {
 
         let debug_texture = &self.debug_texture;
         let gameplay_texture = &mut self.gameplay_texture;
+        let current_pattern_bank = match ppu.current_background_pattern_table() {
+            PatternTableSelection::Left => &left_pattern_bank,
+            PatternTableSelection::Right => &right_pattern_bank,
+        };
+
         self.canvas
             .with_texture_canvas(gameplay_texture, |canvas| {
                 for row in 0..30 {
@@ -374,7 +379,7 @@ impl<'a> Renderer<'a> {
                         let xx: i32 = col.try_into().unwrap();
                         let yy: i32 = row.try_into().unwrap();
 
-                        left_pattern_bank.render_tile(
+                        current_pattern_bank.render_tile(
                             canvas,
                             nametable_value,
                             palette_set_index,

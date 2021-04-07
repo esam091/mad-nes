@@ -6,6 +6,12 @@ enum AddressLatch {
     High,
 }
 
+#[derive(Clone, Copy)]
+pub enum PatternTableSelection {
+    Left,
+    Right,
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
@@ -90,6 +96,14 @@ impl Ppu {
 
     pub fn right_pattern_table(&self) -> &[u8] {
         &self.memory[0x1000..0x2000]
+    }
+
+    pub fn current_background_pattern_table(&self) -> PatternTableSelection {
+        if self.control_flag & 0x16 == 0 {
+            PatternTableSelection::Left
+        } else {
+            PatternTableSelection::Right
+        }
     }
 
     pub fn get_color_palette(&self) -> ColorPalette {
