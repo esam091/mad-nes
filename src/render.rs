@@ -12,7 +12,7 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::{ColorPalette, PatternTableSelection, Ppu};
+use crate::ppu::{ColorPalette, DrawPriority, PatternTableSelection, Ppu};
 
 const PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80),
@@ -270,6 +270,7 @@ pub struct Renderer<'a> {
     gameplay_texture: Texture<'a>,
     left_pattern_texture: Texture<'a>,
     right_pattern_texture: Texture<'a>,
+    foreground_sprite_texture: Texture<'a>,
 }
 
 impl<'a> Renderer<'a> {
@@ -282,6 +283,12 @@ impl<'a> Renderer<'a> {
         let gameplay_texture = texture_creator
             .create_texture_target(None, 256, 240)
             .unwrap();
+
+        let mut foreground_sprite_texture = texture_creator
+            .create_texture_target(canvas.default_pixel_format(), 256, 240)
+            .unwrap();
+
+        foreground_sprite_texture.set_blend_mode(sdl2::render::BlendMode::Blend);
 
         let left_pattern_texture = texture_creator
             .create_texture_target(None, 128, 128)
@@ -298,6 +305,7 @@ impl<'a> Renderer<'a> {
             gameplay_texture,
             left_pattern_texture,
             right_pattern_texture,
+            foreground_sprite_texture,
         }
     }
 
@@ -340,8 +348,35 @@ impl<'a> Renderer<'a> {
             })
             .unwrap();
 
+        let foreground_sprite_texture = &mut self.foreground_sprite_texture;
+        self.canvas
+            .with_texture_canvas(foreground_sprite_texture, |canvas| {
+                canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+                canvas.clear();
+
+                for sprite_data in ppu.get_oam_sprite_data() {
+                    if sprite_data.draw_priority == DrawPriority::Background {
+                        continue;
+                    }
+
+                    let pattern_bank = match sprite_data.tile_pattern {
+                        PatternTableSelection::Left => &left_pattern_bank,
+                        PatternTableSelection::Right => &right_pattern_bank,
+                    };
+
+                    left_pattern_bank.render_tile(
+                        canvas,
+                        sprite_data.tile_number,
+                        sprite_data.color_palette,
+                        Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
+                    )
+                }
+            })
+            .unwrap();
+
         let debug_texture = &self.debug_texture;
         let gameplay_texture = &mut self.gameplay_texture;
+
         let current_pattern_bank = match ppu.current_background_pattern_table() {
             PatternTableSelection::Left => &left_pattern_bank,
             PatternTableSelection::Right => &right_pattern_bank,
@@ -389,6 +424,8 @@ impl<'a> Renderer<'a> {
                 }
 
                 canvas.copy(debug_texture, None, None).unwrap();
+
+                canvas.copy(foreground_sprite_texture, None, None).unwrap();
             })
             .unwrap();
 

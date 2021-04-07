@@ -6,10 +6,27 @@ enum AddressLatch {
     High,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PatternTableSelection {
     Left,
     Right,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DrawPriority {
+    Foreground,
+    Background,
+}
+
+pub struct SpriteData {
+    pub x: u8,
+    pub y: u8,
+    pub tile_number: u8,
+    pub tile_pattern: PatternTableSelection,
+    pub color_palette: u8,
+    pub draw_priority: DrawPriority,
+    pub flip_horizontal: bool,
+    pub flip_vertical: bool,
 }
 
 #[derive(PartialEq, Eq)]
@@ -56,6 +73,7 @@ impl Ppu {
 
     pub fn write_oam_data(&mut self, data: u8) {
         self.oam_data[self.current_oam_address as usize] = data;
+        self.current_oam_address += 1;
     }
 
     pub fn write_data(&mut self, data: u8) {
@@ -70,6 +88,48 @@ impl Ppu {
 
     pub fn copy_oam_data(&mut self, data: &[u8]) {
         &self.oam_data.copy_from_slice(data);
+    }
+
+    pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
+        (0usize..=255)
+            .step_by(4)
+            .map(|index| {
+                let y = self.oam_data[index];
+                let x = self.oam_data[index + 3];
+
+                let byte1 = self.oam_data[index + 1];
+                let tile_pattern = if byte1 & 1 != 0 {
+                    PatternTableSelection::Right
+                } else {
+                    PatternTableSelection::Left
+                };
+
+                let tile_number = byte1;
+
+                let byte2 = self.oam_data[index + 2];
+                let color_palette = byte2 & 0b00000011;
+
+                let draw_priority = if byte2 & 0b00100000 == 0 {
+                    DrawPriority::Foreground
+                } else {
+                    DrawPriority::Background
+                };
+
+                let flip_horizontal = byte2 & 0b01000000 != 0;
+                let flip_vertical = byte2 & 0b10000000 != 0;
+
+                SpriteData {
+                    x,
+                    y,
+                    tile_pattern,
+                    tile_number,
+                    color_palette,
+                    draw_priority,
+                    flip_horizontal,
+                    flip_vertical,
+                }
+            })
+            .collect::<Vec<_>>()
     }
 
     pub fn write_address(&mut self, byte: u8) {
