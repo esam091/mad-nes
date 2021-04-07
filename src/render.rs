@@ -406,8 +406,8 @@ impl<'a> Renderer<'a> {
                         let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
                             (0, 0) => top_left,
                             (1, 0) => top_right,
-                            (1, 1) => bottom_left,
-                            (0, 1) => bottom_right,
+                            (0, 1) => bottom_left,
+                            (1, 1) => bottom_right,
                             _ => panic!("Impossible subtile location!"),
                         };
 
