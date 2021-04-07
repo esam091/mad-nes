@@ -14,6 +14,8 @@ use sdl2::{
 
 use crate::ppu::{ColorPalette, DrawPriority, PatternTableSelection, Ppu};
 
+const COLOR_KEY: Color = Color::RGBA(3, 3, 3, 3);
+
 const PALETTE: [(u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80),
     (0x00, 0x3D, 0xA6),
@@ -175,6 +177,9 @@ impl<'r> PatternBank<'r> {
             .map(|set_number| {
                 let mut pattern_surface =
                     Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
+
+                pattern_surface.set_color_key(true, COLOR_KEY).unwrap();
+
                 pattern_surface
                     .set_palette(&color_sets[set_number])
                     .unwrap();
@@ -221,6 +226,9 @@ impl<'r> PatternBank<'r> {
 
         canvas
             .with_texture_canvas(&mut texture, |canvas| {
+                canvas.set_draw_color(Color::BLACK);
+                canvas.clear();
+
                 for row in 0..16 {
                     for col in 0..16 {
                         let tile_number = row * 16 + col;
@@ -245,7 +253,8 @@ fn create_sdl_palette(color_palette: &ColorPalette) -> Vec<Palette> {
     let palettes: Vec<Palette> = (0..4)
         .map(|set_index| {
             let color_set = color_palette.color_set;
-            let mut colors = vec![Color::RGBA(0, 0, 0, 0)];
+
+            let mut colors = vec![COLOR_KEY];
 
             let set = color_set[set_index as usize];
 
@@ -384,6 +393,10 @@ impl<'a> Renderer<'a> {
 
         self.canvas
             .with_texture_canvas(gameplay_texture, |canvas| {
+                // TODO: handle with the real background color from palette
+                canvas.set_draw_color(Color::RGB(0, 0, 0));
+                canvas.clear();
+
                 for row in 0..30 {
                     for col in 0..32 {
                         let nametable_address = row * 32 + col + 0x2000;
