@@ -138,14 +138,36 @@ fn create_debug_texture<T>(
 
 const SCALE: u32 = 2;
 
+fn create_texture<'r>(
+    texture_creator: &'r TextureCreator<WindowContext>,
+    raw_bytes: &[u8],
+    color_palette: &Palette,
+) -> Texture<'r> {
+    let mut pattern_surface = Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
+
+    pattern_surface.set_color_key(true, COLOR_KEY).unwrap();
+
+    pattern_surface.set_palette(&color_palette).unwrap();
+
+    let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
+    pattern_surface_raw.copy_from_slice(raw_bytes);
+
+    let pattern_texture = texture_creator
+        .create_texture_from_surface(pattern_surface)
+        .unwrap();
+
+    pattern_texture
+}
 struct PatternBank<'r> {
     textures: Vec<Texture<'r>>,
+    sprite_textures: Vec<Texture<'r>>,
 }
 
 impl<'r> PatternBank<'r> {
     fn new(
         pattern_table: &[u8],
-        color_sets: &Vec<Palette>,
+        background_color_sets: &Vec<Palette>,
+        sprite_color_sets: &Vec<Palette>,
         texture_creator: &'r TextureCreator<WindowContext>,
     ) -> PatternBank<'r> {
         /*
@@ -175,27 +197,24 @@ impl<'r> PatternBank<'r> {
 
         let textures: Vec<Texture> = (0..4)
             .map(|set_number| {
-                let mut pattern_surface =
-                    Surface::new(8, 256 * 8, PixelFormatEnum::Index8).unwrap();
-
-                pattern_surface.set_color_key(true, COLOR_KEY).unwrap();
-
-                pattern_surface
-                    .set_palette(&color_sets[set_number])
-                    .unwrap();
-
-                let pattern_surface_raw = pattern_surface.without_lock_mut().unwrap();
-                pattern_surface_raw.copy_from_slice(&raw_bytes);
-
-                let pattern_texture = texture_creator
-                    .create_texture_from_surface(pattern_surface)
-                    .unwrap();
-
-                pattern_texture
+                create_texture(
+                    &texture_creator,
+                    &raw_bytes,
+                    &background_color_sets[set_number],
+                )
             })
             .collect();
 
-        PatternBank { textures }
+        let sprite_textures: Vec<Texture> = (0..4)
+            .map(|set_number| {
+                create_texture(&texture_creator, &raw_bytes, &sprite_color_sets[set_number])
+            })
+            .collect();
+
+        PatternBank {
+            textures,
+            sprite_textures,
+        }
     }
 
     fn render_tile(
@@ -205,11 +224,49 @@ impl<'r> PatternBank<'r> {
         attribute_value: u8,
         dst: Rect,
     ) {
+        self.render_tile_ex(canvas, nametable_value, attribute_value, dst, false, false);
+    }
+
+    fn render_tile_ex(
+        &self,
+        canvas: &mut WindowCanvas,
+        nametable_value: u8,
+        attribute_value: u8,
+        dst: Rect,
+        flip_horizontal: bool,
+        flip_vertical: bool,
+    ) {
         canvas
-            .copy(
+            .copy_ex(
                 &self.textures[attribute_value as usize],
                 Rect::new(0, nametable_value as i32 * 8, 8, 8),
                 dst,
+                0.0,
+                None,
+                flip_horizontal,
+                flip_vertical,
+            )
+            .unwrap();
+    }
+
+    fn render_sprite_ex(
+        &self,
+        canvas: &mut WindowCanvas,
+        nametable_value: u8,
+        attribute_value: u8,
+        dst: Rect,
+        flip_horizontal: bool,
+        flip_vertical: bool,
+    ) {
+        canvas
+            .copy_ex(
+                &self.sprite_textures[attribute_value as usize],
+                Rect::new(0, nametable_value as i32 * 8, 8, 8),
+                dst,
+                0.0,
+                None,
+                flip_horizontal,
+                flip_vertical,
             )
             .unwrap();
     }
@@ -249,10 +306,10 @@ impl<'r> PatternBank<'r> {
     }
 }
 
-fn create_sdl_palette(color_palette: &ColorPalette) -> Vec<Palette> {
+fn create_sdl_palette(color_palette: &[[u8; 3]]) -> Vec<Palette> {
     let palettes: Vec<Palette> = (0..4)
         .map(|set_index| {
-            let color_set = color_palette.color_set;
+            let color_set = color_palette;
 
             let mut colors = vec![COLOR_KEY];
 
@@ -324,15 +381,26 @@ impl<'a> Renderer<'a> {
 
         let video_buffer = ppu.get_buffer();
 
-        let color_sets = create_sdl_palette(&ppu.get_color_palette());
+        let raw_palette = ppu.get_color_palette();
+
+        let background_color_sets = create_sdl_palette(&raw_palette.background_color_set);
+        let sprite_color_sets = create_sdl_palette(&raw_palette.sprite_color_set);
 
         let start_time = std::time::SystemTime::now();
 
-        let left_pattern_bank =
-            PatternBank::new(ppu.left_pattern_table(), &color_sets, self.texture_creator);
+        let left_pattern_bank = PatternBank::new(
+            ppu.left_pattern_table(),
+            &background_color_sets,
+            &sprite_color_sets,
+            self.texture_creator,
+        );
 
-        let right_pattern_bank =
-            PatternBank::new(ppu.right_pattern_table(), &color_sets, self.texture_creator);
+        let right_pattern_bank = PatternBank::new(
+            ppu.right_pattern_table(),
+            &background_color_sets,
+            &sprite_color_sets,
+            self.texture_creator,
+        );
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
@@ -373,11 +441,13 @@ impl<'a> Renderer<'a> {
                         PatternTableSelection::Right => &right_pattern_bank,
                     };
 
-                    left_pattern_bank.render_tile(
+                    left_pattern_bank.render_sprite_ex(
                         canvas,
                         sprite_data.tile_number,
                         sprite_data.color_palette,
                         Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
+                        sprite_data.flip_horizontal,
+                        sprite_data.flip_vertical,
                     )
                 }
             })

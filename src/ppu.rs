@@ -43,7 +43,8 @@ pub struct Ppu {
 
 pub struct ColorPalette {
     pub background: u8,
-    pub color_set: [[u8; 3]; 4],
+    pub background_color_set: [[u8; 3]; 4],
+    pub sprite_color_set: [[u8; 3]; 4],
 }
 
 impl Ppu {
@@ -169,7 +170,7 @@ impl Ppu {
     pub fn get_color_palette(&self) -> ColorPalette {
         ColorPalette {
             background: self.memory[0x3f00],
-            color_set: [
+            background_color_set: [
                 [
                     self.memory[0x3f01],
                     self.memory[0x3f02],
@@ -189,6 +190,28 @@ impl Ppu {
                     self.memory[0x3f0d],
                     self.memory[0x3f0e],
                     self.memory[0x3f0f],
+                ],
+            ],
+            sprite_color_set: [
+                [
+                    self.memory[0x3f11],
+                    self.memory[0x3f12],
+                    self.memory[0x3f13],
+                ],
+                [
+                    self.memory[0x3f15],
+                    self.memory[0x3f16],
+                    self.memory[0x3f17],
+                ],
+                [
+                    self.memory[0x3f19],
+                    self.memory[0x3f1a],
+                    self.memory[0x3f1b],
+                ],
+                [
+                    self.memory[0x3f1d],
+                    self.memory[0x3f1e],
+                    self.memory[0x3f1f],
                 ],
             ],
         }
