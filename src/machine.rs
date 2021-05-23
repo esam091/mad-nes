@@ -61,6 +61,7 @@ impl Machine {
                     let slice =
                         &self.cpu.get_memory_buffer()[starting_address..=starting_address + 0xff];
                     self.ppu.copy_oam_data(slice);
+                    self.cycle_counter.advance(557);
                 }
                 cpu::SideEffect::ClearAddressLatch => {
                     self.ppu.clear_address_latch();
