@@ -250,10 +250,12 @@ pub enum Instruction {
     IsbYAbsolute(u16),
 }
 
+#[inline(always)]
 fn next_byte<I: Iterator<Item = u8>>(iter: &mut I) -> u8 {
     iter.next().unwrap()
 }
 
+#[inline(always)]
 fn next_word<I: Iterator<Item = u8>>(iter: &mut I) -> u16 {
     let low_byte = next_byte(iter);
     let high_byte = next_byte(iter);
@@ -262,6 +264,7 @@ fn next_word<I: Iterator<Item = u8>>(iter: &mut I) -> u16 {
 }
 
 impl Instruction {
+    #[inline(always)]
     pub fn from_bytes<I>(iter: &mut I) -> Result<Instruction, u8>
     where
         I: Iterator<Item = u8>,

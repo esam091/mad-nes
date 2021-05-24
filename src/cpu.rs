@@ -20,6 +20,7 @@ pub struct CpuResult {
     pub side_effect: Option<SideEffect>,
 }
 
+#[inline(always)]
 fn cycles(cycles_elapsed: u32) -> CpuResult {
     CpuResult {
         cycles_elapsed: cycles_elapsed,
@@ -44,6 +45,7 @@ pub struct Cpu {
 
 impl Cpu {
     #[must_use]
+    #[inline(always)]
     fn set_memory_value(&mut self, address: u16, value: u8) -> Option<SideEffect> {
         self.memory[address as usize] = value;
 
@@ -62,7 +64,7 @@ impl Cpu {
         self.memory[0x2002] |= 0x80;
 
         if self.memory[0x2000] & 0x80 != 0 {
-            println!("Enter vblank");
+            // println!("Enter vblank");
 
             let addresses = self.pc.to_le_bytes();
             self.push(addresses[1]);
@@ -87,7 +89,7 @@ impl Cpu {
             })
             .unwrap();
 
-        println!("{:#04X?}", instruction);
+        // println!("{:#04X?}", instruction);
 
         match instruction {
             Instruction::AndImmediate(value) => {
@@ -1280,6 +1282,7 @@ impl Cpu {
     }
 
     #[must_use]
+    #[inline(always)]
     fn dec(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect =
             self.set_memory_value(address, self.memory[address as usize].overflowing_sub(1).0);
@@ -1288,6 +1291,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     #[must_use]
     fn inc(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect =
@@ -1297,6 +1301,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn rra(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect = self.ror_address(address);
         self.adc(self.memory[address as usize]);
@@ -1304,6 +1309,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn sre(&mut self, address: u16) -> Option<SideEffect> {
         let mut value = self.memory[address as usize];
         let carry = value.bitand(1) != 0;
@@ -1319,6 +1325,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn rla(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect = self.rol_address(address);
         self.a &= self.memory[address as usize];
@@ -1327,6 +1334,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn slo(&mut self, address: u16) -> Option<SideEffect> {
         let carry = self.memory[address as usize].bitand(0x80) != 0;
         let (value, _) = self.memory[address as usize].overflowing_shl(1);
@@ -1339,6 +1347,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn isb(&mut self, address: u16) -> Option<SideEffect> {
         let value = self.memory[address as usize].overflowing_add(1).0;
         let side_effect = self.set_memory_value(address, value);
@@ -1356,6 +1365,7 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn dcp(&mut self, address: u16) -> Option<SideEffect> {
         let (value, _) = self.memory[address as usize].overflowing_sub(1);
         let side_effect = self.set_memory_value(address, value);
@@ -1367,10 +1377,12 @@ impl Cpu {
         side_effect
     }
 
+    #[inline(always)]
     fn sax(&mut self, address: u16) -> Option<SideEffect> {
         self.set_memory_value(address, self.a & self.x)
     }
 
+    #[inline(always)]
     fn lax(&mut self, value: u8) {
         self.a = value;
         self.x = value;
@@ -1378,14 +1390,17 @@ impl Cpu {
         self.toggle_zero_negative_flag(value);
     }
 
+    #[inline(always)]
     fn zero_page_address(&self, address: u8, offset: u8) -> u8 {
         address.overflowing_add(offset).0
     }
 
+    #[inline(always)]
     fn zero_page_value(&self, address: u8, offset: u8) -> u8 {
         self.memory[self.zero_page_address(address, offset) as usize]
     }
 
+    #[inline(always)]
     fn absolute_address(&self, address: u16, offset: u8) -> (u16, bool) {
         let mut address_split = address.to_le_bytes();
         let (result, carry1) = address_split[0].overflowing_add(offset);
@@ -1399,12 +1414,14 @@ impl Cpu {
         (address, carry1 || carry2)
     }
 
+    #[inline(always)]
     fn absolute_value(&self, address: u16, offset: u8) -> (u8, bool) {
         let (address, carry) = self.absolute_address(address, offset);
 
         (self.memory[address as usize], carry)
     }
 
+    #[inline(always)]
     fn ror(&mut self, value: u8) -> u8 {
         let mut value = value;
         let carry = value & 1 != 0;
@@ -1416,12 +1433,14 @@ impl Cpu {
         value
     }
 
+    #[inline(always)]
     #[must_use]
     fn ror_address(&mut self, address: u16) -> Option<SideEffect> {
         let value = self.ror(self.memory[address as usize]);
         self.set_memory_value(address, value)
     }
 
+    #[inline(always)]
     fn rol(&mut self, value: u8) -> u8 {
         let mut value = value;
         let carry = value & 0x80 != 0;
@@ -1432,12 +1451,14 @@ impl Cpu {
         value
     }
 
+    #[inline(always)]
     #[must_use]
     fn rol_address(&mut self, address: u16) -> Option<SideEffect> {
         let value = self.rol(self.memory[address as usize]);
         self.set_memory_value(address, value)
     }
 
+    #[inline(always)]
     fn asl(&mut self, value: u8) -> u8 {
         let mut value = value;
         let carry = value & 0x80 != 0;
@@ -1448,12 +1469,14 @@ impl Cpu {
         value
     }
 
+    #[inline(always)]
     #[must_use]
     fn asl_address(&mut self, address: u16) -> Option<SideEffect> {
         let value = self.asl(self.memory[address as usize]);
         self.set_memory_value(address, value)
     }
 
+    #[inline(always)]
     fn lsr(&mut self, value: u8) -> u8 {
         let carry = value & 1 != 0;
         let value = value >> 1;
@@ -1463,12 +1486,14 @@ impl Cpu {
         value
     }
 
+    #[inline(always)]
     #[must_use]
     fn lsr_address(&mut self, address: u16) -> Option<SideEffect> {
         let value = self.lsr(self.memory[address as usize]);
         self.set_memory_value(address, value)
     }
 
+    #[inline(always)]
     fn compare(&mut self, register_value: u8, value: u8) {
         let (value, overflow) = register_value.overflowing_sub(value);
         self.set_zero_flag(value == 0);
@@ -1476,6 +1501,7 @@ impl Cpu {
         self.set_carry_flag(!overflow);
     }
 
+    #[inline(always)]
     fn sbc(&mut self, value: u8) {
         let (result, not_carry) = self
             .a
@@ -1490,6 +1516,7 @@ impl Cpu {
         self.set_overflow_flag(overflow);
     }
 
+    #[inline(always)]
     fn adc(&mut self, value: u8) {
         let (result2, carry2) = value.overflowing_add(self.is_carry_flag_on() as u8);
         let (result, carry) = self.a.overflowing_add(result2);
@@ -1501,21 +1528,25 @@ impl Cpu {
         self.set_overflow_flag(overflow);
     }
 
+    #[inline(always)]
     fn exor(&mut self, value: u8) {
         self.a ^= value;
         self.toggle_zero_negative_flag(self.a);
     }
 
+    #[inline(always)]
     fn and(&mut self, value: u8) {
         self.a &= value;
         self.toggle_zero_negative_flag(self.a);
     }
 
+    #[inline(always)]
     fn or(&mut self, value: u8) {
         self.a |= value;
         self.toggle_zero_negative_flag(self.a);
     }
 
+    #[inline(always)]
     fn indirect_indexed_address(&self, index: u8) -> (u16, bool) {
         let (low_addr, carry1) = self.memory[index as usize].overflowing_add(self.y);
 
@@ -1527,12 +1558,14 @@ impl Cpu {
         (address, carry1 || carry2)
     }
 
+    #[inline(always)]
     fn indirect_indexed_value(&self, index: u8) -> (u8, bool) {
         let (address, overflow) = self.indirect_indexed_address(index);
 
         (self.memory[address as usize], overflow)
     }
 
+    #[inline(always)]
     fn indexed_indirect_address(&self, index: u8) -> u16 {
         let low_addr = index.overflowing_add(self.x).0;
         let high_addr = low_addr.overflowing_add(1).0;
@@ -1543,10 +1576,12 @@ impl Cpu {
         ])
     }
 
+    #[inline(always)]
     fn indexed_indirect_value(&self, index: u8) -> u8 {
         self.memory[self.indexed_indirect_address(index) as usize]
     }
 
+    #[inline(always)]
     fn jump_if(&mut self, condition: bool, offset: u8) -> CpuResult {
         if condition {
             let new_address = self.pc as i16 + (offset as i8) as i16;
@@ -1559,40 +1594,49 @@ impl Cpu {
         return cycles(2);
     }
 
+    #[inline(always)]
     fn push(&mut self, value: u8) {
         self.memory[self.sp as usize + 0x0100] = value;
         self.sp -= 1;
     }
 
+    #[inline(always)]
     fn pop(&mut self) -> u8 {
         self.sp += 1;
         self.memory[self.sp as usize + 0x0100]
     }
 
+    #[inline(always)]
     fn set_negative_flag(&mut self, is_on: bool) {
         self.set_p_flag(7, is_on);
     }
 
+    #[inline(always)]
     fn set_zero_flag(&mut self, is_on: bool) {
         self.set_p_flag(1, is_on);
     }
 
+    #[inline(always)]
     fn set_break_flag(&mut self, is_on: bool) {
         self.p &= !((is_on as u8) << 4);
     }
 
+    #[inline(always)]
     fn set_carry_flag(&mut self, is_on: bool) {
         self.set_p_flag(0, is_on);
     }
 
+    #[inline(always)]
     fn set_overflow_flag(&mut self, is_on: bool) {
         self.set_p_flag(6, is_on);
     }
 
+    #[inline(always)]
     fn set_decimal_flag(&mut self, is_on: bool) {
         self.set_p_flag(3, is_on);
     }
 
+    #[inline(always)]
     fn set_p_flag(&mut self, bit_offset: u8, is_on: bool) {
         let byte = 1 << bit_offset;
         if is_on {
@@ -1602,26 +1646,32 @@ impl Cpu {
         }
     }
 
+    #[inline(always)]
     fn set_interrupt_flag(&mut self, is_on: bool) {
         self.set_p_flag(2, is_on);
     }
 
+    #[inline(always)]
     fn is_overflow_flag_on(&self) -> bool {
         self.p.bitand(1 << 6) != 0
     }
 
+    #[inline(always)]
     fn is_negative_flag_on(&self) -> bool {
         self.p.bitand(1 << 7) != 0
     }
 
+    #[inline(always)]
     fn is_carry_flag_on(&self) -> bool {
         self.p.bitand(1) != 0
     }
 
+    #[inline(always)]
     fn is_zero_flag_on(&self) -> bool {
         self.p.bitand(2) != 0
     }
 
+    #[inline(always)]
     fn toggle_zero_negative_flag(&mut self, value: u8) {
         self.set_negative_flag(value & 0x80 != 0);
         self.set_zero_flag(value == 0);
