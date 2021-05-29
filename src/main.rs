@@ -168,6 +168,19 @@ fn main() -> Result<(), String> {
             for event in event_pump.poll_iter() {
                 match event {
                     sdl2::event::Event::Quit { .. } => break 'running,
+                    sdl2::event::Event::KeyDown {
+                        keycode: Some(key), ..
+                    } => match key {
+                        sdl2::keyboard::Keycode::A => machine.set_current_key(true),
+                        _ => machine.set_current_key(false),
+                    },
+                    sdl2::event::Event::KeyUp {
+                        keycode: Some(keycode),
+                        ..
+                    } => match keycode {
+                        sdl2::keyboard::Keycode::A => machine.set_current_key(false),
+                        _ => machine.set_current_key(false),
+                    },
                     _ => {}
                 }
             }

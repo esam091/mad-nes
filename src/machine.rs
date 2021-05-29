@@ -1,7 +1,7 @@
 use std::u8;
 
 use crate::{
-    cpu::{self, Cpu, MemoryBuffer},
+    cpu::{self, Bus, Cpu, MemoryBuffer},
     ppu::Ppu,
 };
 use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
@@ -11,11 +11,29 @@ pub enum SideEffect {
 }
 
 #[derive(PartialEq, Eq)]
+struct RealBus {
+    is_key_pressed: bool,
+}
+
+impl Bus for RealBus {
+    fn read_address(&self, address: u16) -> u8 {
+        if address == 0x4016 {
+            return if self.is_key_pressed { 1 } else { 0 };
+        }
+
+        0
+    }
+
+    fn write_address(&mut self, address: u16, value: u8) {}
+}
+
+#[derive(PartialEq, Eq)]
 pub struct Machine {
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
     ppu: Ppu,
+    bus: RealBus,
 }
 
 impl Machine {
@@ -33,11 +51,14 @@ impl Machine {
 
             cpu: Cpu::load(&rom),
             ppu: Ppu::new(video_memory),
+            bus: RealBus {
+                is_key_pressed: false,
+            },
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
-        let result = self.cpu.step();
+        let result = self.cpu.step(&mut self.bus);
 
         if let Some(side_effect) = result.side_effect {
             // println!("side effect {:#04X?}", side_effect);
@@ -103,6 +124,10 @@ impl Machine {
 
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
+    }
+
+    pub fn set_current_key(&mut self, a: bool) {
+        self.bus.is_key_pressed = a;
     }
 }
 
