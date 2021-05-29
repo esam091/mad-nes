@@ -1,4 +1,4 @@
-use std::{env, io};
+use std::{convert::TryInto, env, io, time::Duration};
 
 mod cpu;
 mod ines;
@@ -136,13 +136,13 @@ fn main() -> Result<(), String> {
 
     // terminal.clear().unwrap();
 
+    let mut frame_counter = 0;
+    let mut cpu_steps = 0;
+
+    let mut start_time = std::time::SystemTime::now();
+
     'running: loop {
-        for event in event_pump.poll_iter() {
-            match event {
-                sdl2::event::Event::Quit { .. } => break 'running,
-                _ => {}
-            }
-        }
+        let aa = std::time::SystemTime::now();
 
         // terminal
         //     .draw(|f| {
@@ -161,19 +161,41 @@ fn main() -> Result<(), String> {
         //     .map_err(|_| "Failed drawing terminal")?;
 
         let side_effect = machine.step();
+        cpu_steps += 1;
 
         if let Some(side_effect) = side_effect {
+            // let start_time = std::time::SystemTime::now();
+            for event in event_pump.poll_iter() {
+                match event {
+                    sdl2::event::Event::Quit { .. } => break 'running,
+                    _ => {}
+                }
+            }
+
             renderer.render(&machine.get_ppu());
 
-            let start_time = std::time::SystemTime::now();
+            frame_counter += 1;
 
-            let duration = std::time::SystemTime::now()
-                .duration_since(start_time)
-                .unwrap();
+            let last_render_time = std::time::SystemTime::now();
+            let render_duration = last_render_time.duration_since(start_time).unwrap();
 
-            // println!("Render duration: {:?}", duration);
+            if render_duration.as_micros() < 16667 {
+                let sleep_duration = 16667u128 - render_duration.as_micros();
 
-            // std::thread::sleep(Duration::from_millis(3));
+                std::thread::sleep(Duration::from_micros(sleep_duration.try_into().unwrap()));
+            }
+
+            start_time = std::time::SystemTime::now();
+        }
+
+        let now = std::time::SystemTime::now();
+        let duration = now.duration_since(start_time).unwrap();
+
+        if duration > Duration::from_secs(1) {
+            dbg!(frame_counter);
+            dbg!(cpu_steps);
+            frame_counter = 0;
+            cpu_steps = 0;
         }
     }
 
