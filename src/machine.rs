@@ -19,7 +19,6 @@ enum JoypadState {
 
 #[derive(PartialEq, Eq)]
 struct RealBus {
-    is_key_pressed: bool,
     active_buttons: HashSet<JoypadButton>,
     joypad_state: JoypadState,
 }
@@ -111,7 +110,6 @@ impl Machine {
             cpu: Cpu::load(&rom),
             ppu: Ppu::new(video_memory),
             bus: RealBus {
-                is_key_pressed: false,
                 active_buttons: HashSet::new(),
                 joypad_state: JoypadState::Idle,
             },
@@ -185,10 +183,6 @@ impl Machine {
 
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
-    }
-
-    pub fn set_current_key(&mut self, a: bool) {
-        self.bus.is_key_pressed = a;
     }
 
     pub fn set_active_buttons(&mut self, buttons: HashSet<JoypadButton>) {
