@@ -10,7 +10,7 @@ pub enum SideEffect {
     Render,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum JoypadState {
     Polling,
     Ready(JoypadButton),
@@ -47,7 +47,8 @@ impl Bus for RealBus {
                         0
                     }
                 }
-                _ => 1,
+                JoypadState::Polling => 0,
+                JoypadState::Idle => 1,
             };
 
             let next_state = match self.joypad_state {

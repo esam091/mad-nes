@@ -548,11 +548,15 @@ impl Cpu {
             },
 
             Instruction::StaAbsolute(address) => {
-                let side_effect = self.set_memory_value(address, self.a);
-
-                CpuResult {
-                    cycles_elapsed: 4,
-                    side_effect,
+                if address == 0x4016 {
+                    bus.write_address(address, self.a);
+                    return cycles(4);
+                } else {
+                    let side_effect = self.set_memory_value(address, self.a);
+                    return CpuResult {
+                        cycles_elapsed: 4,
+                        side_effect,
+                    };
                 }
             }
 
