@@ -710,7 +710,11 @@ impl Cpu {
             Instruction::LdaXAbsolute(address) => {
                 let (address, carry) = self.absolute_address(address, self.x);
 
-                self.a = self.memory[address as usize];
+                if address == 0x4016 {
+                    self.a = bus.read_address(address);
+                } else {
+                    self.a = self.memory[address as usize];
+                }
 
                 self.toggle_zero_negative_flag(self.a);
                 cycles(4 + carry as u32)
