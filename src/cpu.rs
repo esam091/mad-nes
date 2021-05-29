@@ -65,26 +65,6 @@ impl Cpu {
         }
     }
 
-    fn set_memory_value2<B: Bus>(
-        &mut self,
-        bus: &mut B,
-        address: u16,
-        value: u8,
-    ) -> Option<SideEffect> {
-        self.memory[address as usize] = value;
-        bus.write_address(address, value);
-
-        match address {
-            0x2003 => Some(SideEffect::WriteOamAddr(value)),
-            0x2004 => Some(SideEffect::WriteOamData(value)),
-            0x4014 => Some(SideEffect::OamDma(value)),
-            0x2006 => Some(SideEffect::WritePpuAddr(value)),
-            0x2007 => Some(SideEffect::WritePpuData(value)),
-            0x2000 => Some(SideEffect::SetPpuControl(value)),
-            _ => None,
-        }
-    }
-
     pub fn enter_vblank(&mut self) {
         self.memory[0x2002] |= 0x80;
 

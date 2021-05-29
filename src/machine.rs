@@ -19,6 +19,7 @@ enum JoypadState {
 
 #[derive(PartialEq, Eq)]
 struct RealBus {
+    memory: MemoryBuffer,
     active_buttons: HashSet<JoypadButton>,
     joypad_state: JoypadState,
 }
@@ -37,50 +38,52 @@ pub enum JoypadButton {
 
 impl Bus for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
-        if address == 0x4016 {
-            let value: u8 = match self.joypad_state {
-                JoypadState::Ready(button) => {
-                    if self.active_buttons.contains(&button) {
-                        1
-                    } else {
-                        0
+        match address {
+            0x4016 => {
+                let value: u8 = match self.joypad_state {
+                    JoypadState::Ready(button) => {
+                        if self.active_buttons.contains(&button) {
+                            1
+                        } else {
+                            0
+                        }
                     }
-                }
-                JoypadState::Polling => 0,
-                JoypadState::Idle => 1,
-            };
+                    JoypadState::Polling => 0,
+                    JoypadState::Idle => 1,
+                };
 
-            let next_state = match self.joypad_state {
-                JoypadState::Ready(button) => match button {
-                    JoypadButton::A => JoypadState::Ready(JoypadButton::B),
-                    JoypadButton::B => JoypadState::Ready(JoypadButton::Select),
-                    JoypadButton::Select => JoypadState::Ready(JoypadButton::Start),
-                    JoypadButton::Start => JoypadState::Ready(JoypadButton::Up),
-                    JoypadButton::Up => JoypadState::Ready(JoypadButton::Down),
-                    JoypadButton::Down => JoypadState::Ready(JoypadButton::Left),
-                    JoypadButton::Left => JoypadState::Ready(JoypadButton::Right),
-                    JoypadButton::Right => JoypadState::Idle,
-                },
-                _ => self.joypad_state,
-            };
+                let next_state = match self.joypad_state {
+                    JoypadState::Ready(button) => match button {
+                        JoypadButton::A => JoypadState::Ready(JoypadButton::B),
+                        JoypadButton::B => JoypadState::Ready(JoypadButton::Select),
+                        JoypadButton::Select => JoypadState::Ready(JoypadButton::Start),
+                        JoypadButton::Start => JoypadState::Ready(JoypadButton::Up),
+                        JoypadButton::Up => JoypadState::Ready(JoypadButton::Down),
+                        JoypadButton::Down => JoypadState::Ready(JoypadButton::Left),
+                        JoypadButton::Left => JoypadState::Ready(JoypadButton::Right),
+                        JoypadButton::Right => JoypadState::Idle,
+                    },
+                    _ => self.joypad_state,
+                };
 
-            self.joypad_state = next_state;
+                self.joypad_state = next_state;
 
-            return value;
+                return value;
+            }
+            _ => self.memory[address as usize],
         }
-
-        0
     }
 
     fn write_address(&mut self, address: u16, value: u8) {
-        if address == 0x4016 {
-            match (self.joypad_state, value) {
+        match address {
+            0x4016 => match (self.joypad_state, value) {
                 (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
                 (JoypadState::Polling, 0) => {
                     self.joypad_state = JoypadState::Ready(JoypadButton::A)
                 }
                 _ => {}
-            }
+            },
+            _ => self.memory[address as usize] = value,
         }
     }
 }
@@ -110,6 +113,7 @@ impl Machine {
             cpu: Cpu::load(&rom),
             ppu: Ppu::new(video_memory),
             bus: RealBus {
+                memory: [0; 0x10000],
                 active_buttons: HashSet::new(),
                 joypad_state: JoypadState::Idle,
             },
