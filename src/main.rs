@@ -1,4 +1,4 @@
-use std::{convert::TryInto, env, io, time::Duration};
+use std::{collections::HashSet, convert::TryInto, env, io, time::Duration};
 
 mod cpu;
 mod ines;
@@ -8,10 +8,11 @@ mod ppu;
 mod render;
 
 use cpu::MemoryBuffer;
-use machine::Machine;
+use machine::{JoypadButton, Machine};
 use ppu::VideoMemoryBuffer;
 use render::Renderer;
 
+use sdl2::keyboard::Keycode;
 use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
@@ -164,23 +165,43 @@ fn main() -> Result<(), String> {
         cpu_steps += 1;
 
         if let Some(side_effect) = side_effect {
-            // let start_time = std::time::SystemTime::now();
             for event in event_pump.poll_iter() {
+                let mut active_buttons = HashSet::<JoypadButton>::new();
                 match event {
                     sdl2::event::Event::Quit { .. } => break 'running,
                     sdl2::event::Event::KeyDown {
                         keycode: Some(key), ..
-                    } => match key {
-                        sdl2::keyboard::Keycode::A => machine.set_current_key(true),
-                        _ => machine.set_current_key(false),
-                    },
-                    sdl2::event::Event::KeyUp {
-                        keycode: Some(keycode),
-                        ..
-                    } => match keycode {
-                        sdl2::keyboard::Keycode::A => machine.set_current_key(false),
-                        _ => machine.set_current_key(false),
-                    },
+                    } => {
+                        match key {
+                            Keycode::A => {
+                                active_buttons.insert(JoypadButton::A);
+                            }
+                            Keycode::B => {
+                                active_buttons.insert(JoypadButton::B);
+                            }
+                            Keycode::RShift => {
+                                active_buttons.insert(JoypadButton::Select);
+                            }
+                            Keycode::Return => {
+                                active_buttons.insert(JoypadButton::Start);
+                            }
+                            Keycode::Up => {
+                                active_buttons.insert(JoypadButton::Up);
+                            }
+                            Keycode::Down => {
+                                active_buttons.insert(JoypadButton::Down);
+                            }
+                            Keycode::Left => {
+                                active_buttons.insert(JoypadButton::Left);
+                            }
+                            Keycode::Right => {
+                                active_buttons.insert(JoypadButton::Right);
+                            }
+                            _ => {}
+                        };
+
+                        machine.set_active_buttons(active_buttons);
+                    }
                     _ => {}
                 }
             }

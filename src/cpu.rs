@@ -29,7 +29,7 @@ fn cycles(cycles_elapsed: u32) -> CpuResult {
 }
 
 pub trait Bus {
-    fn read_address(&self, address: u16) -> u8;
+    fn read_address(&mut self, address: u16) -> u8;
     fn write_address(&mut self, address: u16, value: u8);
 }
 
@@ -103,7 +103,7 @@ impl Cpu {
         self.memory[0x2002] &= !0x80;
     }
 
-    pub fn step<B: Bus>(&mut self, bus: &B) -> CpuResult {
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> CpuResult {
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {
                 format!(
