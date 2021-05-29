@@ -405,7 +405,7 @@ impl<'a> Renderer<'a> {
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
             .unwrap();
-        println!("Tile generation duration: {:?}", duration);
+        // println!("Tile generation duration: {:?}", duration);
 
         let pattern_texture =
             left_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
