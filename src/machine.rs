@@ -1,7 +1,7 @@
-use std::u8;
+use std::{collections::HashSet, u8};
 
 use crate::{
-    cpu::{self, Cpu, MemoryBuffer},
+    cpu::{self, Bus, Cpu, MemoryBuffer},
     ppu::Ppu,
 };
 use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
@@ -10,12 +10,89 @@ pub enum SideEffect {
     Render,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum JoypadState {
+    Polling,
+    Ready(JoypadButton),
+    Idle,
+}
+
+#[derive(PartialEq, Eq)]
+struct RealBus {
+    is_key_pressed: bool,
+    active_buttons: HashSet<JoypadButton>,
+    joypad_state: JoypadState,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum JoypadButton {
+    A,
+    B,
+    Select,
+    Start,
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Bus for RealBus {
+    fn read_address(&mut self, address: u16) -> u8 {
+        if address == 0x4016 {
+            let value: u8 = match self.joypad_state {
+                JoypadState::Ready(button) => {
+                    if self.active_buttons.contains(&button) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                JoypadState::Polling => 0,
+                JoypadState::Idle => 1,
+            };
+
+            let next_state = match self.joypad_state {
+                JoypadState::Ready(button) => match button {
+                    JoypadButton::A => JoypadState::Ready(JoypadButton::B),
+                    JoypadButton::B => JoypadState::Ready(JoypadButton::Select),
+                    JoypadButton::Select => JoypadState::Ready(JoypadButton::Start),
+                    JoypadButton::Start => JoypadState::Ready(JoypadButton::Up),
+                    JoypadButton::Up => JoypadState::Ready(JoypadButton::Down),
+                    JoypadButton::Down => JoypadState::Ready(JoypadButton::Left),
+                    JoypadButton::Left => JoypadState::Ready(JoypadButton::Right),
+                    JoypadButton::Right => JoypadState::Idle,
+                },
+                _ => self.joypad_state,
+            };
+
+            self.joypad_state = next_state;
+
+            return value;
+        }
+
+        0
+    }
+
+    fn write_address(&mut self, address: u16, value: u8) {
+        if address == 0x4016 {
+            match (self.joypad_state, value) {
+                (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
+                (JoypadState::Polling, 0) => {
+                    self.joypad_state = JoypadState::Ready(JoypadButton::A)
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Machine {
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
     ppu: Ppu,
+    bus: RealBus,
 }
 
 impl Machine {
@@ -33,11 +110,16 @@ impl Machine {
 
             cpu: Cpu::load(&rom),
             ppu: Ppu::new(video_memory),
+            bus: RealBus {
+                is_key_pressed: false,
+                active_buttons: HashSet::new(),
+                joypad_state: JoypadState::Idle,
+            },
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
-        let result = self.cpu.step();
+        let result = self.cpu.step(&mut self.bus);
 
         if let Some(side_effect) = result.side_effect {
             // println!("side effect {:#04X?}", side_effect);
@@ -103,6 +185,14 @@ impl Machine {
 
     pub fn get_cpu(&self) -> &Cpu {
         &self.cpu
+    }
+
+    pub fn set_current_key(&mut self, a: bool) {
+        self.bus.is_key_pressed = a;
+    }
+
+    pub fn set_active_buttons(&mut self, buttons: HashSet<JoypadButton>) {
+        self.bus.active_buttons = buttons;
     }
 }
 

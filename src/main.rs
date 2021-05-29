@@ -1,4 +1,4 @@
-use std::{convert::TryInto, env, io, time::Duration};
+use std::{collections::HashSet, convert::TryInto, env, io, time::Duration};
 
 mod cpu;
 mod ines;
@@ -8,10 +8,11 @@ mod ppu;
 mod render;
 
 use cpu::MemoryBuffer;
-use machine::Machine;
+use machine::{JoypadButton, Machine};
 use ppu::VideoMemoryBuffer;
 use render::Renderer;
 
+use sdl2::keyboard::{Keycode, Scancode};
 use termion::raw::IntoRawMode;
 use tui::{
     backend::TermionBackend,
@@ -164,13 +165,46 @@ fn main() -> Result<(), String> {
         cpu_steps += 1;
 
         if let Some(side_effect) = side_effect {
-            // let start_time = std::time::SystemTime::now();
+            let mut active_buttons = HashSet::<JoypadButton>::new();
+
             for event in event_pump.poll_iter() {
                 match event {
                     sdl2::event::Event::Quit { .. } => break 'running,
                     _ => {}
                 }
             }
+
+            for scancode in event_pump.keyboard_state().pressed_scancodes() {
+                match scancode {
+                    Scancode::A => {
+                        active_buttons.insert(JoypadButton::A);
+                    }
+                    Scancode::S => {
+                        active_buttons.insert(JoypadButton::B);
+                    }
+                    Scancode::RShift => {
+                        active_buttons.insert(JoypadButton::Select);
+                    }
+                    Scancode::Return => {
+                        active_buttons.insert(JoypadButton::Start);
+                    }
+                    Scancode::Up => {
+                        active_buttons.insert(JoypadButton::Up);
+                    }
+                    Scancode::Down => {
+                        active_buttons.insert(JoypadButton::Down);
+                    }
+                    Scancode::Left => {
+                        active_buttons.insert(JoypadButton::Left);
+                    }
+                    Scancode::Right => {
+                        active_buttons.insert(JoypadButton::Right);
+                    }
+                    _ => {}
+                }
+            }
+            // dbg!(&active_buttons);
+            machine.set_active_buttons(active_buttons);
 
             renderer.render(&machine.get_ppu());
 

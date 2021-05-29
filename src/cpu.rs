@@ -28,6 +28,11 @@ fn cycles(cycles_elapsed: u32) -> CpuResult {
     }
 }
 
+pub trait Bus {
+    fn read_address(&mut self, address: u16) -> u8;
+    fn write_address(&mut self, address: u16, value: u8);
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Cpu {
     memory: MemoryBuffer,
@@ -60,6 +65,26 @@ impl Cpu {
         }
     }
 
+    fn set_memory_value2<B: Bus>(
+        &mut self,
+        bus: &mut B,
+        address: u16,
+        value: u8,
+    ) -> Option<SideEffect> {
+        self.memory[address as usize] = value;
+        bus.write_address(address, value);
+
+        match address {
+            0x2003 => Some(SideEffect::WriteOamAddr(value)),
+            0x2004 => Some(SideEffect::WriteOamData(value)),
+            0x4014 => Some(SideEffect::OamDma(value)),
+            0x2006 => Some(SideEffect::WritePpuAddr(value)),
+            0x2007 => Some(SideEffect::WritePpuData(value)),
+            0x2000 => Some(SideEffect::SetPpuControl(value)),
+            _ => None,
+        }
+    }
+
     pub fn enter_vblank(&mut self) {
         self.memory[0x2002] |= 0x80;
 
@@ -78,7 +103,7 @@ impl Cpu {
         self.memory[0x2002] &= !0x80;
     }
 
-    pub fn step(&mut self) -> CpuResult {
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> CpuResult {
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {
                 format!(
@@ -523,11 +548,15 @@ impl Cpu {
             },
 
             Instruction::StaAbsolute(address) => {
-                let side_effect = self.set_memory_value(address, self.a);
-
-                CpuResult {
-                    cycles_elapsed: 4,
-                    side_effect,
+                if address == 0x4016 {
+                    bus.write_address(address, self.a);
+                    return cycles(4);
+                } else {
+                    let side_effect = self.set_memory_value(address, self.a);
+                    return CpuResult {
+                        cycles_elapsed: 4,
+                        side_effect,
+                    };
                 }
             }
 
@@ -631,7 +660,11 @@ impl Cpu {
             }
 
             Instruction::LdaAbsolute(address) => {
-                self.a = self.memory[address as usize];
+                if address == 0x4016 {
+                    self.a = bus.read_address(address);
+                } else {
+                    self.a = self.memory[address as usize];
+                }
                 self.toggle_zero_negative_flag(self.a);
 
                 if address == 0x2002 {
@@ -677,7 +710,11 @@ impl Cpu {
             Instruction::LdaXAbsolute(address) => {
                 let (address, carry) = self.absolute_address(address, self.x);
 
-                self.a = self.memory[address as usize];
+                if address == 0x4016 {
+                    self.a = bus.read_address(address);
+                } else {
+                    self.a = self.memory[address as usize];
+                }
 
                 self.toggle_zero_negative_flag(self.a);
                 cycles(4 + carry as u32)
