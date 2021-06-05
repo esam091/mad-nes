@@ -463,8 +463,9 @@ impl<'a> Renderer<'a> {
 
         self.canvas
             .with_texture_canvas(gameplay_texture, |canvas| {
-                // TODO: handle with the real background color from palette
-                canvas.set_draw_color(Color::RGB(0, 0, 0));
+                let (r, g, b) = PALETTE[raw_palette.background as usize];
+
+                canvas.set_draw_color(Color::RGB(r, g, b));
                 canvas.clear();
 
                 let current_nametable = ppu.current_nametable_address();
