@@ -107,7 +107,7 @@ impl Ppu {
                 let x = self.oam_data[index + 3];
 
                 let byte1 = self.oam_data[index + 1];
-                let tile_pattern = if byte1 & 1 != 0 {
+                let tile_pattern = if self.control_flag & 8 != 0 {
                     PatternTableSelection::Right
                 } else {
                     PatternTableSelection::Left
