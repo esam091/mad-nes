@@ -16,7 +16,7 @@ pub struct Machine {
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
-    ppu: Ppu,
+    // ppu: Ppu,
     // bus: RealBus,
 }
 
@@ -28,58 +28,26 @@ impl Machine {
         let mut video_memory = [0; 0x4000];
         video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
 
+        let cycle_counter = CycleCounter::power_on();
+
         let bus = RealBus {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
+            ppu: Ppu::new(video_memory),
         };
 
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
             cycles: 0,
-            cycle_counter: CycleCounter::power_on(),
+            cycle_counter,
 
             cpu: Cpu::load(&rom, bus),
-            ppu: Ppu::new(video_memory),
-            // bus,
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
         let result = self.cpu.step();
-
-        if let Some(side_effect) = result.side_effect {
-            // println!("side effect {:#04X?}", side_effect);
-
-            match side_effect {
-                cpu::SideEffect::WritePpuAddr(address) => {
-                    self.ppu.write_address(address);
-                }
-                cpu::SideEffect::WritePpuData(value) => {
-                    self.ppu.write_data(value);
-                }
-
-                cpu::SideEffect::WriteOamAddr(address) => {
-                    self.ppu.set_oam_address(address);
-                }
-                cpu::SideEffect::WriteOamData(data) => {
-                    self.ppu.write_oam_data(data);
-                }
-                cpu::SideEffect::OamDma(byte) => {
-                    let starting_address = byte as usize * 0x100;
-                    let slice =
-                        &self.cpu.get_memory_buffer()[starting_address..=starting_address + 0xff];
-                    self.ppu.copy_oam_data(slice);
-                    self.cycle_counter.advance(557);
-                }
-                cpu::SideEffect::ClearAddressLatch => {
-                    self.ppu.clear_address_latch();
-                }
-                cpu::SideEffect::SetPpuControl(value) => {
-                    self.ppu.set_control_flag(value);
-                }
-            }
-        }
 
         match self.cycle_counter.advance(result.cycles_elapsed) {
             Some(CycleOutput::EnterVblank) => {
@@ -103,11 +71,11 @@ impl Machine {
     }
 
     pub fn get_video_buffer(&self) -> &VideoMemoryBuffer {
-        &self.ppu.get_buffer()
+        &self.cpu.bus.ppu.get_buffer()
     }
 
     pub fn get_ppu(&self) -> &Ppu {
-        &self.ppu
+        &self.cpu.bus.ppu
     }
 
     pub fn get_cpu(&self) -> &Cpu {

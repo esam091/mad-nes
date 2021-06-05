@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use crate::ppu::Ppu;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum JoypadState {
     Polling,
@@ -31,11 +33,16 @@ pub struct RealBus {
     pub memory: MemoryBuffer,
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
+    pub ppu: Ppu,
 }
 
 impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
         match address {
+            0x2002 => {
+                self.ppu.clear_address_latch();
+                return self.memory[address as usize];
+            }
             0x4016 => {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
@@ -73,6 +80,21 @@ impl BusTrait for RealBus {
 
     fn write_address(&mut self, address: u16, value: u8) {
         match address {
+            0x2000 => {
+                self.ppu.set_control_flag(value);
+                self.memory[address as usize] = value;
+            }
+            0x2006 => self.ppu.write_address(value),
+            0x2007 => self.ppu.write_data(value),
+            0x2003 => self.ppu.set_oam_address(value),
+            0x2004 => self.ppu.write_oam_data(value),
+            0x4014 => {
+                let starting_address = value as usize * 0x100;
+                let slice = &self.memory[starting_address..=starting_address + 0xff];
+                self.ppu.copy_oam_data(slice);
+
+                // TODO: advance cycles
+            }
             0x4016 => match (self.joypad_state, value) {
                 (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
                 (JoypadState::Polling, 0) => {
