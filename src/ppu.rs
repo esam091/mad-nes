@@ -91,6 +91,14 @@ impl Ppu {
         &self.oam_data.copy_from_slice(data);
     }
 
+    pub fn current_nametable_address(&self) -> usize {
+        0x2000 + (self.control_flag as usize & 0b11) * 0x400
+    }
+
+    pub fn current_attribute_table_address(&self) -> usize {
+        0x23c0 + (self.control_flag as usize & 0b11) * 0x400
+    }
+
     pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
         (0usize..=255)
             .step_by(4)
@@ -160,7 +168,7 @@ impl Ppu {
     }
 
     pub fn current_background_pattern_table(&self) -> PatternTableSelection {
-        if self.control_flag & 0x16 == 0 {
+        if self.control_flag & 16 == 0 {
             PatternTableSelection::Left
         } else {
             PatternTableSelection::Right

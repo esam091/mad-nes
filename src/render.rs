@@ -441,7 +441,7 @@ impl<'a> Renderer<'a> {
                         PatternTableSelection::Right => &right_pattern_bank,
                     };
 
-                    left_pattern_bank.render_sprite_ex(
+                    pattern_bank.render_sprite_ex(
                         canvas,
                         sprite_data.tile_number,
                         sprite_data.color_palette,
@@ -467,16 +467,20 @@ impl<'a> Renderer<'a> {
                 canvas.set_draw_color(Color::RGB(0, 0, 0));
                 canvas.clear();
 
+                let current_nametable = ppu.current_nametable_address();
+                let current_attribute_table = ppu.current_attribute_table_address();
+
                 for row in 0..30 {
                     for col in 0..32 {
-                        let nametable_address = row * 32 + col + 0x2000;
+                        let nametable_address = row * 32 + col + current_nametable;
 
                         let nametable_value = video_buffer[nametable_address];
 
                         let attribute_y = row / 4;
                         let attribute_x = col / 4;
 
-                        let attribute_value = video_buffer[0x23c0 + attribute_x + attribute_y * 8];
+                        let attribute_value =
+                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
 
                         let top_left = attribute_value & 0b11;
                         let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
