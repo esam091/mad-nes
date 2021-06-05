@@ -1,7 +1,8 @@
 use std::{collections::HashSet, u8};
 
 use crate::{
-    cpu::{self, Bus, Cpu, MemoryBuffer},
+    bus::{BusTrait, JoypadButton, JoypadState, RealBus},
+    cpu::{self, Cpu, MemoryBuffer},
     ppu::Ppu,
 };
 use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
@@ -10,91 +11,13 @@ pub enum SideEffect {
     Render,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum JoypadState {
-    Polling,
-    Ready(JoypadButton),
-    Idle,
-}
-
-#[derive(PartialEq, Eq)]
-struct RealBus {
-    memory: MemoryBuffer,
-    active_buttons: HashSet<JoypadButton>,
-    joypad_state: JoypadState,
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub enum JoypadButton {
-    A,
-    B,
-    Select,
-    Start,
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl Bus for RealBus {
-    fn read_address(&mut self, address: u16) -> u8 {
-        match address {
-            0x4016 => {
-                let value: u8 = match self.joypad_state {
-                    JoypadState::Ready(button) => {
-                        if self.active_buttons.contains(&button) {
-                            1
-                        } else {
-                            0
-                        }
-                    }
-                    JoypadState::Polling => 0,
-                    JoypadState::Idle => 1,
-                };
-
-                let next_state = match self.joypad_state {
-                    JoypadState::Ready(button) => match button {
-                        JoypadButton::A => JoypadState::Ready(JoypadButton::B),
-                        JoypadButton::B => JoypadState::Ready(JoypadButton::Select),
-                        JoypadButton::Select => JoypadState::Ready(JoypadButton::Start),
-                        JoypadButton::Start => JoypadState::Ready(JoypadButton::Up),
-                        JoypadButton::Up => JoypadState::Ready(JoypadButton::Down),
-                        JoypadButton::Down => JoypadState::Ready(JoypadButton::Left),
-                        JoypadButton::Left => JoypadState::Ready(JoypadButton::Right),
-                        JoypadButton::Right => JoypadState::Idle,
-                    },
-                    _ => self.joypad_state,
-                };
-
-                self.joypad_state = next_state;
-
-                return value;
-            }
-            _ => self.memory[address as usize],
-        }
-    }
-
-    fn write_address(&mut self, address: u16, value: u8) {
-        match address {
-            0x4016 => match (self.joypad_state, value) {
-                (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
-                (JoypadState::Polling, 0) => {
-                    self.joypad_state = JoypadState::Ready(JoypadButton::A)
-                }
-                _ => {}
-            },
-            _ => self.memory[address as usize] = value,
-        }
-    }
-}
-
 #[derive(PartialEq, Eq)]
 pub struct Machine {
     cycles: u32,
     cycle_counter: CycleCounter,
     cpu: Cpu,
     ppu: Ppu,
-    bus: RealBus,
+    // bus: RealBus,
 }
 
 impl Machine {
@@ -105,23 +28,25 @@ impl Machine {
         let mut video_memory = [0; 0x4000];
         video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
 
+        let bus = RealBus {
+            memory: [0; 0x10000],
+            active_buttons: HashSet::new(),
+            joypad_state: JoypadState::Idle,
+        };
+
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
             cycles: 0,
             cycle_counter: CycleCounter::power_on(),
 
-            cpu: Cpu::load(&rom),
+            cpu: Cpu::load(&rom, bus),
             ppu: Ppu::new(video_memory),
-            bus: RealBus {
-                memory: [0; 0x10000],
-                active_buttons: HashSet::new(),
-                joypad_state: JoypadState::Idle,
-            },
+            // bus,
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
-        let result = self.cpu.step(&mut self.bus);
+        let result = self.cpu.step();
 
         if let Some(side_effect) = result.side_effect {
             // println!("side effect {:#04X?}", side_effect);
@@ -190,7 +115,7 @@ impl Machine {
     }
 
     pub fn set_active_buttons(&mut self, buttons: HashSet<JoypadButton>) {
-        self.bus.active_buttons = buttons;
+        self.cpu.bus.active_buttons = buttons;
     }
 }
 

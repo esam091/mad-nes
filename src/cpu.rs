@@ -1,6 +1,10 @@
 use std::ops::{BitAnd, BitAndAssign, BitOr};
 
-use crate::{ines::InesRom, instruction::Instruction};
+use crate::{
+    bus::{BusTrait, RealBus},
+    ines::InesRom,
+    instruction::Instruction,
+};
 
 pub type MemoryBuffer = [u8; 0x10000];
 
@@ -28,14 +32,9 @@ fn cycles(cycles_elapsed: u32) -> CpuResult {
     }
 }
 
-pub trait Bus {
-    fn read_address(&mut self, address: u16) -> u8;
-    fn write_address(&mut self, address: u16, value: u8);
-}
-
 #[derive(PartialEq, Eq)]
 pub struct Cpu {
-    memory: MemoryBuffer,
+    // memory: MemoryBuffer,
     pc: u16,
     a: u8,
     x: u8,
@@ -46,13 +45,15 @@ pub struct Cpu {
     nmi_vector: u16,
     reset_vector: u16,
     irq_vector: u16,
+
+    pub bus: RealBus,
 }
 
 impl Cpu {
     #[must_use]
     #[inline(always)]
     fn set_memory_value(&mut self, address: u16, value: u8) -> Option<SideEffect> {
-        self.memory[address as usize] = value;
+        self.bus.write_address(address, value);
 
         match address {
             0x2003 => Some(SideEffect::WriteOamAddr(value)),
@@ -66,9 +67,12 @@ impl Cpu {
     }
 
     pub fn enter_vblank(&mut self) {
-        self.memory[0x2002] |= 0x80;
+        // TODO: fix 0x2002 access
+        // self.memory[0x2002] |= 0x80;
+        let value = self.bus.read_address(0x2002) | 0x80;
+        self.bus.write_address(0x2002, value);
 
-        if self.memory[0x2000] & 0x80 != 0 {
+        if self.bus.read_address(0x2000) & 0x80 != 0 {
             // println!("Enter vblank");
 
             let addresses = self.pc.to_le_bytes();
@@ -80,10 +84,11 @@ impl Cpu {
     }
 
     pub fn exit_vblank(&mut self) {
-        self.memory[0x2002] &= !0x80;
+        let value = self.bus.read_address(0x2002) & !0x80;
+        self.bus.write_address(0x2002, value);
     }
 
-    pub fn step<B: Bus>(&mut self, bus: &mut B) -> CpuResult {
+    pub fn step(&mut self) -> CpuResult {
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {
                 format!(
@@ -103,7 +108,8 @@ impl Cpu {
             }
 
             Instruction::AndXIndexedIndirect(index) => {
-                self.and(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.and(value);
                 cycles(6)
             }
 
@@ -114,17 +120,21 @@ impl Cpu {
             }
 
             Instruction::AndZeroPage(address) => {
-                self.and(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.and(value);
                 cycles(3)
             }
 
             Instruction::AndXZeroPage(address) => {
-                self.and(self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.and(value);
                 cycles(4)
             }
 
             Instruction::AndAbsolute(address) => {
-                self.and(self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+
+                self.and(value);
                 cycles(4)
             }
 
@@ -146,22 +156,26 @@ impl Cpu {
             }
 
             Instruction::OraXIndexedIndirect(index) => {
-                self.or(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.or(value);
                 cycles(6)
             }
 
             Instruction::OraZeroPage(address) => {
-                self.or(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.or(value);
                 cycles(3)
             }
 
             Instruction::OraXZeroPage(address) => {
-                self.or(self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.or(value);
                 cycles(4)
             }
 
             Instruction::OraAbsolute(address) => {
-                self.or(self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.or(value);
                 cycles(4)
             }
 
@@ -190,7 +204,8 @@ impl Cpu {
             }
 
             Instruction::EorXIndexedIndirect(index) => {
-                self.exor(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.exor(value);
                 cycles(6)
             }
 
@@ -201,17 +216,20 @@ impl Cpu {
             }
 
             Instruction::EorZeroPage(address) => {
-                self.exor(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.exor(value);
                 cycles(3)
             }
 
             Instruction::EorXZeroPage(address) => {
-                self.exor(self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.exor(value);
                 cycles(4)
             }
 
             Instruction::EorAbsolute(address) => {
-                self.exor(self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.exor(value);
                 cycles(4)
             }
 
@@ -233,7 +251,8 @@ impl Cpu {
             }
 
             Instruction::AdcXIndexedIndirect(index) => {
-                self.adc(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.adc(value);
                 cycles(6)
             }
 
@@ -244,17 +263,20 @@ impl Cpu {
             }
 
             Instruction::AdcZeroPage(address) => {
-                self.adc(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.adc(value);
                 cycles(3)
             }
 
             Instruction::AdcXZeroPage(address) => {
-                self.adc(self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.adc(value);
                 cycles(4)
             }
 
             Instruction::AdcAbsolute(address) => {
-                self.adc(self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.adc(value);
                 cycles(4)
             }
 
@@ -276,7 +298,8 @@ impl Cpu {
             }
 
             Instruction::SbcXIndexedIndirect(index) => {
-                self.sbc(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.sbc(value);
                 cycles(6)
             }
 
@@ -287,17 +310,20 @@ impl Cpu {
             }
 
             Instruction::SbcZeroPage(address) => {
-                self.sbc(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.sbc(value);
                 cycles(3)
             }
 
             Instruction::SbcXZeroPage(address) => {
-                self.sbc(self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.sbc(value);
                 cycles(4)
             }
 
             Instruction::SbcAbsolute(address) => {
-                self.sbc(self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.sbc(value);
                 cycles(4)
             }
 
@@ -319,7 +345,8 @@ impl Cpu {
             }
 
             Instruction::CmpXIndexedIndirect(index) => {
-                self.compare(self.a, self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.compare(self.a, value);
                 cycles(6)
             }
 
@@ -330,17 +357,20 @@ impl Cpu {
             }
 
             Instruction::CmpZeroPage(address) => {
-                self.compare(self.a, self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.compare(self.a, value);
                 cycles(3)
             }
 
             Instruction::CmpXZeroPage(address) => {
-                self.compare(self.a, self.zero_page_value(address, self.x));
+                let value = self.zero_page_value(address, self.x);
+                self.compare(self.a, value);
                 cycles(4)
             }
 
             Instruction::CmpAbsolute(address) => {
-                self.compare(self.a, self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.compare(self.a, value);
                 cycles(4)
             }
 
@@ -362,12 +392,14 @@ impl Cpu {
             }
 
             Instruction::CpxZeroPage(address) => {
-                self.compare(self.x, self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.compare(self.x, value);
                 cycles(3)
             }
 
             Instruction::CpxAbsolute(address) => {
-                self.compare(self.x, self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.compare(self.x, value);
                 cycles(4)
             }
 
@@ -377,12 +409,14 @@ impl Cpu {
             }
 
             Instruction::CpyZeroPage(address) => {
-                self.compare(self.y, self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.compare(self.y, value);
                 cycles(3)
             }
 
             Instruction::CpyAbsolute(address) => {
-                self.compare(self.y, self.memory[address as usize]);
+                let value = self.bus.read_address(address);
+                self.compare(self.y, value);
                 cycles(4)
             }
 
@@ -529,7 +563,7 @@ impl Cpu {
 
             Instruction::StaAbsolute(address) => {
                 if address == 0x4016 {
-                    bus.write_address(address, self.a);
+                    self.bus.write_address(address, self.a);
                     return cycles(4);
                 } else {
                     let side_effect = self.set_memory_value(address, self.a);
@@ -568,7 +602,7 @@ impl Cpu {
             }
 
             Instruction::LdxZeroPage(address) => {
-                self.x = self.memory[address as usize];
+                self.x = self.bus.read_address(address as u16);
                 self.toggle_zero_negative_flag(self.x);
 
                 cycles(3)
@@ -582,7 +616,7 @@ impl Cpu {
             }
 
             Instruction::LdxAbsolute(address) => {
-                self.x = self.memory[address as usize];
+                self.x = self.bus.read_address(address);
                 self.toggle_zero_negative_flag(self.x);
 
                 cycles(4)
@@ -604,7 +638,7 @@ impl Cpu {
             }
 
             Instruction::LdyZeroPage(address) => {
-                self.y = self.memory[address as usize];
+                self.y = self.bus.read_address(address as u16);
                 self.toggle_zero_negative_flag(self.y);
 
                 cycles(3)
@@ -618,7 +652,7 @@ impl Cpu {
             }
 
             Instruction::LdyAbsolute(address) => {
-                self.y = self.memory[address as usize];
+                self.y = self.bus.read_address(address);
                 self.toggle_zero_negative_flag(self.x);
 
                 cycles(4)
@@ -641,14 +675,16 @@ impl Cpu {
 
             Instruction::LdaAbsolute(address) => {
                 if address == 0x4016 {
-                    self.a = bus.read_address(address);
+                    self.a = self.bus.read_address(address);
                 } else {
-                    self.a = self.memory[address as usize];
+                    self.a = self.bus.read_address(address);
                 }
                 self.toggle_zero_negative_flag(self.a);
 
                 if address == 0x2002 {
-                    self.memory[0x2002] &= !0x80;
+                    let new_value = self.bus.read_address(0x2002) & !0x80;
+                    self.bus.write_address(0x2002, new_value);
+
                     return CpuResult {
                         cycles_elapsed: 4,
                         side_effect: Some(SideEffect::ClearAddressLatch),
@@ -658,7 +694,7 @@ impl Cpu {
             }
 
             Instruction::LdaZeroPage(address) => {
-                self.a = self.memory[address as usize];
+                self.a = self.bus.read_address(address as u16);
                 self.toggle_zero_negative_flag(self.a);
 
                 cycles(3)
@@ -674,7 +710,7 @@ impl Cpu {
             Instruction::LdaXIndexedIndirect(index) => {
                 let address = self.indexed_indirect_address(index);
 
-                self.a = self.memory[address as usize];
+                self.a = self.bus.read_address(address);
 
                 self.toggle_zero_negative_flag(self.a);
                 cycles(6)
@@ -691,9 +727,9 @@ impl Cpu {
                 let (address, carry) = self.absolute_address(address, self.x);
 
                 if address == 0x4016 {
-                    self.a = bus.read_address(address);
+                    self.a = self.bus.read_address(address);
                 } else {
-                    self.a = self.memory[address as usize];
+                    self.a = self.bus.read_address(address);
                 }
 
                 self.toggle_zero_negative_flag(self.a);
@@ -703,7 +739,7 @@ impl Cpu {
             Instruction::LdaYAbsolute(address) => {
                 let (address, carry) = self.absolute_address(address, self.y);
 
-                self.a = self.memory[address as usize];
+                self.a = self.bus.read_address(address);
 
                 self.toggle_zero_negative_flag(self.a);
                 cycles(4 + carry as u32)
@@ -776,7 +812,7 @@ impl Cpu {
             }
 
             Instruction::JmpIndirect(address) => {
-                let low_byte = self.memory[address as usize];
+                let low_byte = self.bus.read_address(address);
 
                 /*
                     http://nesdev.com/6502_cpu.txt
@@ -791,7 +827,7 @@ impl Cpu {
                 high_address_split[0] = high_address_split[0].overflowing_add(1).0;
 
                 let high_address = u16::from_le_bytes(high_address_split);
-                let high_byte = self.memory[high_address as usize];
+                let high_byte = self.bus.read_address(high_address as u16);
 
                 self.pc = u16::from_le_bytes([low_byte, high_byte]);
 
@@ -949,7 +985,7 @@ impl Cpu {
             Instruction::Bcc(offset) => self.jump_if(!self.is_carry_flag_on(), offset),
 
             Instruction::BitZeroPage(address) => {
-                let value = self.memory[address as usize];
+                let value = self.bus.read_address(address as u16);
 
                 self.set_negative_flag(value & 0x80 != 0);
                 self.set_overflow_flag(value & 0x40 != 0);
@@ -958,7 +994,7 @@ impl Cpu {
             }
 
             Instruction::BitAbsolute(address) => {
-                let value = self.memory[address as usize];
+                let value = self.bus.read_address(address);
 
                 self.set_negative_flag(value & 0x80 != 0);
                 self.set_overflow_flag(value & 0x40 != 0);
@@ -1031,7 +1067,8 @@ impl Cpu {
             }
 
             Instruction::LaxXIndexedIndirect(index) => {
-                self.lax(self.indexed_indirect_value(index));
+                let value = self.indexed_indirect_value(index);
+                self.lax(value);
                 cycles(6)
             }
 
@@ -1042,17 +1079,20 @@ impl Cpu {
             }
 
             Instruction::LaxZeroPage(address) => {
-                self.lax(self.memory[address as usize]);
+                let value = self.bus.read_address(address as u16);
+                self.lax(value);
                 cycles(3)
             }
 
             Instruction::LaxYZeroPage(address) => {
-                self.lax(self.zero_page_value(address, self.y));
+                let value = self.zero_page_value(address, self.y);
+                self.lax(value);
                 cycles(4)
             }
 
             Instruction::LaxAbsolute(address) => {
-                self.lax(self.absolute_value(address, 0).0);
+                let value = self.absolute_value(address, 0).0;
+                self.lax(value);
                 cycles(4)
             }
 
@@ -1086,15 +1126,21 @@ impl Cpu {
                 side_effect: self.sax(address),
             },
 
-            Instruction::DcpXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.dcp(self.indexed_indirect_address(index)),
-            },
+            Instruction::DcpXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.dcp(address),
+                }
+            }
 
-            Instruction::DcpYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.dcp(self.indirect_indexed_address(index).0),
-            },
+            Instruction::DcpYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.dcp(address),
+                }
+            }
 
             Instruction::DcpZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1121,15 +1167,21 @@ impl Cpu {
                 side_effect: self.dcp(self.absolute_address(address, self.y).0),
             },
 
-            Instruction::IsbXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.isb(self.indexed_indirect_address(index)),
-            },
+            Instruction::IsbXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.isb(address),
+                }
+            }
 
-            Instruction::IsbYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.isb(self.indirect_indexed_address(index).0),
-            },
+            Instruction::IsbYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.isb(address),
+                }
+            }
 
             Instruction::IsbZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1156,15 +1208,21 @@ impl Cpu {
                 side_effect: self.isb(self.absolute_address(address, self.y).0),
             },
 
-            Instruction::SloXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.slo(self.indexed_indirect_address(index)),
-            },
+            Instruction::SloXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.slo(address),
+                }
+            }
 
-            Instruction::SloYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.slo(self.indirect_indexed_address(index).0),
-            },
+            Instruction::SloYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.slo(address),
+                }
+            }
 
             Instruction::SloZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1191,15 +1249,21 @@ impl Cpu {
                 side_effect: self.slo(self.absolute_address(address, self.y).0),
             },
 
-            Instruction::RlaXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.rla(self.indexed_indirect_address(index)),
-            },
+            Instruction::RlaXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.rla(address),
+                }
+            }
 
-            Instruction::RlaYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.rla(self.indirect_indexed_address(index).0),
-            },
+            Instruction::RlaYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.rla(address),
+                }
+            }
 
             Instruction::RlaZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1226,15 +1290,21 @@ impl Cpu {
                 side_effect: self.rla(self.absolute_address(address, self.y).0),
             },
 
-            Instruction::SreXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.sre(self.indexed_indirect_address(index) as u16),
-            },
+            Instruction::SreXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index) as u16;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.sre(address),
+                }
+            }
 
-            Instruction::SreYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.sre(self.indirect_indexed_address(index).0),
-            },
+            Instruction::SreYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.sre(address),
+                }
+            }
 
             Instruction::SreZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1261,15 +1331,21 @@ impl Cpu {
                 side_effect: self.sre(self.absolute_address(address, self.y).0),
             },
 
-            Instruction::RraXIndexedIndirect(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.rra(self.indexed_indirect_address(index)),
-            },
+            Instruction::RraXIndexedIndirect(index) => {
+                let address = self.indexed_indirect_address(index);
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.rra(address),
+                }
+            }
 
-            Instruction::RraYIndirectIndexed(index) => CpuResult {
-                cycles_elapsed: 8,
-                side_effect: self.rra(self.indirect_indexed_address(index).0),
-            },
+            Instruction::RraYIndirectIndexed(index) => {
+                let address = self.indirect_indexed_address(index).0;
+                CpuResult {
+                    cycles_elapsed: 8,
+                    side_effect: self.rra(address),
+                }
+            }
 
             Instruction::RraZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
@@ -1301,9 +1377,9 @@ impl Cpu {
     #[must_use]
     #[inline(always)]
     fn dec(&mut self, address: u16) -> Option<SideEffect> {
-        let side_effect =
-            self.set_memory_value(address, self.memory[address as usize].overflowing_sub(1).0);
-        self.toggle_zero_negative_flag(self.memory[address as usize]);
+        let value = self.bus.read_address(address).overflowing_sub(1).0;
+        let side_effect = self.set_memory_value(address, value);
+        self.toggle_zero_negative_flag(value);
 
         side_effect
     }
@@ -1311,9 +1387,9 @@ impl Cpu {
     #[inline(always)]
     #[must_use]
     fn inc(&mut self, address: u16) -> Option<SideEffect> {
-        let side_effect =
-            self.set_memory_value(address, self.memory[address as usize].overflowing_add(1).0);
-        self.toggle_zero_negative_flag(self.memory[address as usize]);
+        let value = self.bus.read_address(address).overflowing_add(1).0;
+        let side_effect = self.set_memory_value(address, value);
+        self.toggle_zero_negative_flag(value);
 
         side_effect
     }
@@ -1321,14 +1397,15 @@ impl Cpu {
     #[inline(always)]
     fn rra(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect = self.ror_address(address);
-        self.adc(self.memory[address as usize]);
+        let value = self.bus.read_address(address);
+        self.adc(value);
 
         side_effect
     }
 
     #[inline(always)]
     fn sre(&mut self, address: u16) -> Option<SideEffect> {
-        let mut value = self.memory[address as usize];
+        let mut value = self.bus.read_address(address);
         let carry = value.bitand(1) != 0;
 
         value >>= 1;
@@ -1345,7 +1422,7 @@ impl Cpu {
     #[inline(always)]
     fn rla(&mut self, address: u16) -> Option<SideEffect> {
         let side_effect = self.rol_address(address);
-        self.a &= self.memory[address as usize];
+        self.a &= self.bus.read_address(address);
         self.toggle_zero_negative_flag(self.a);
 
         side_effect
@@ -1353,8 +1430,8 @@ impl Cpu {
 
     #[inline(always)]
     fn slo(&mut self, address: u16) -> Option<SideEffect> {
-        let carry = self.memory[address as usize].bitand(0x80) != 0;
-        let (value, _) = self.memory[address as usize].overflowing_shl(1);
+        let carry = self.bus.read_address(address).bitand(0x80) != 0;
+        let (value, _) = self.bus.read_address(address).overflowing_shl(1);
         let side_effect = self.set_memory_value(address, value);
 
         self.a |= value;
@@ -1366,7 +1443,7 @@ impl Cpu {
 
     #[inline(always)]
     fn isb(&mut self, address: u16) -> Option<SideEffect> {
-        let value = self.memory[address as usize].overflowing_add(1).0;
+        let value = self.bus.read_address(address).overflowing_add(1).0;
         let side_effect = self.set_memory_value(address, value);
 
         let (result, sub_overflow) = self
@@ -1384,7 +1461,7 @@ impl Cpu {
 
     #[inline(always)]
     fn dcp(&mut self, address: u16) -> Option<SideEffect> {
-        let (value, _) = self.memory[address as usize].overflowing_sub(1);
+        let (value, _) = self.bus.read_address(address).overflowing_sub(1);
         let side_effect = self.set_memory_value(address, value);
 
         let (result, overflow) = self.a.overflowing_sub(value);
@@ -1413,8 +1490,9 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn zero_page_value(&self, address: u8, offset: u8) -> u8 {
-        self.memory[self.zero_page_address(address, offset) as usize]
+    fn zero_page_value(&mut self, address: u8, offset: u8) -> u8 {
+        self.bus
+            .read_address(self.zero_page_address(address, offset) as u16)
     }
 
     #[inline(always)]
@@ -1432,10 +1510,10 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn absolute_value(&self, address: u16, offset: u8) -> (u8, bool) {
+    fn absolute_value(&mut self, address: u16, offset: u8) -> (u8, bool) {
         let (address, carry) = self.absolute_address(address, offset);
 
-        (self.memory[address as usize], carry)
+        (self.bus.read_address(address), carry)
     }
 
     #[inline(always)]
@@ -1453,7 +1531,8 @@ impl Cpu {
     #[inline(always)]
     #[must_use]
     fn ror_address(&mut self, address: u16) -> Option<SideEffect> {
-        let value = self.ror(self.memory[address as usize]);
+        let value = self.bus.read_address(address);
+        let value = self.ror(value);
         self.set_memory_value(address, value)
     }
 
@@ -1471,7 +1550,8 @@ impl Cpu {
     #[inline(always)]
     #[must_use]
     fn rol_address(&mut self, address: u16) -> Option<SideEffect> {
-        let value = self.rol(self.memory[address as usize]);
+        let value = self.bus.read_address(address);
+        let value = self.rol(value);
         self.set_memory_value(address, value)
     }
 
@@ -1489,7 +1569,8 @@ impl Cpu {
     #[inline(always)]
     #[must_use]
     fn asl_address(&mut self, address: u16) -> Option<SideEffect> {
-        let value = self.asl(self.memory[address as usize]);
+        let value = self.bus.read_address(address);
+        let value = self.asl(value);
         self.set_memory_value(address, value)
     }
 
@@ -1506,7 +1587,8 @@ impl Cpu {
     #[inline(always)]
     #[must_use]
     fn lsr_address(&mut self, address: u16) -> Option<SideEffect> {
-        let value = self.lsr(self.memory[address as usize]);
+        let value = self.bus.read_address(address);
+        let value = self.lsr(value);
         self.set_memory_value(address, value)
     }
 
@@ -1564,11 +1646,14 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn indirect_indexed_address(&self, index: u8) -> (u16, bool) {
-        let (low_addr, carry1) = self.memory[index as usize].overflowing_add(self.y);
+    fn indirect_indexed_address(&mut self, index: u8) -> (u16, bool) {
+        let (low_addr, carry1) = self.bus.read_address(index as u16).overflowing_add(self.y);
 
         let (high_index, _) = index.overflowing_add(1);
-        let (high_addr, carry2) = self.memory[high_index as usize].overflowing_add(carry1 as u8);
+        let (high_addr, carry2) = self
+            .bus
+            .read_address(high_index as u16)
+            .overflowing_add(carry1 as u8);
 
         let address = u16::from_le_bytes([low_addr, high_addr]);
 
@@ -1576,26 +1661,28 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn indirect_indexed_value(&self, index: u8) -> (u8, bool) {
+    fn indirect_indexed_value(&mut self, index: u8) -> (u8, bool) {
         let (address, overflow) = self.indirect_indexed_address(index);
 
-        (self.memory[address as usize], overflow)
+        (self.bus.read_address(address), overflow)
     }
 
     #[inline(always)]
-    fn indexed_indirect_address(&self, index: u8) -> u16 {
+    fn indexed_indirect_address(&mut self, index: u8) -> u16 {
         let low_addr = index.overflowing_add(self.x).0;
         let high_addr = low_addr.overflowing_add(1).0;
 
-        u16::from_le_bytes([
-            self.memory[low_addr as usize],
-            self.memory[high_addr as usize],
-        ])
+        let low_value = self.bus.read_address(low_addr as u16);
+        let high_value = self.bus.read_address(high_addr as u16);
+
+        u16::from_le_bytes([low_value, high_value])
     }
 
     #[inline(always)]
-    fn indexed_indirect_value(&self, index: u8) -> u8 {
-        self.memory[self.indexed_indirect_address(index) as usize]
+    fn indexed_indirect_value(&mut self, index: u8) -> u8 {
+        let value = self.indexed_indirect_address(index) as u16;
+
+        self.bus.read_address(value)
     }
 
     #[inline(always)]
@@ -1613,14 +1700,14 @@ impl Cpu {
 
     #[inline(always)]
     fn push(&mut self, value: u8) {
-        self.memory[self.sp as usize + 0x0100] = value;
+        self.bus.write_address(self.sp as u16 + 0x0100, value);
         self.sp -= 1;
     }
 
     #[inline(always)]
     fn pop(&mut self) -> u8 {
         self.sp += 1;
-        self.memory[self.sp as usize + 0x0100]
+        self.bus.read_address(self.sp as u16 + 0x0100)
     }
 
     #[inline(always)]
@@ -1694,22 +1781,22 @@ impl Cpu {
         self.set_zero_flag(value == 0);
     }
 
-    pub fn new(memory: MemoryBuffer, starting_address: u16) -> Cpu {
-        Cpu {
-            memory: memory,
-            pc: starting_address,
-            a: 0,
-            x: 0,
-            y: 0,
-            p: 0x24,
-            sp: 0xff,
-            nmi_vector: 0,
-            reset_vector: 0,
-            irq_vector: 0,
-        }
-    }
+    // pub fn new(memory: MemoryBuffer, starting_address: u16) -> Cpu<Bus> {
+    //     Cpu<Bus> {
+    //         memory: memory,
+    //         pc: starting_address,
+    //         a: 0,
+    //         x: 0,
+    //         y: 0,
+    //         p: 0x24,
+    //         sp: 0xff,
+    //         nmi_vector: 0,
+    //         reset_vector: 0,
+    //         irq_vector: 0,
+    //     }
+    // }
 
-    pub fn load(rom: &InesRom) -> Cpu {
+    pub fn load(rom: &InesRom, mut bus: RealBus) -> Cpu {
         let mut memory = [0 as u8; 0x10000];
 
         memory[0x8000..0x8000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
@@ -1722,8 +1809,10 @@ impl Cpu {
         let nmi_vector = u16::from_le_bytes([memory[0xfffa], memory[0xfffb]]);
         let irq_vector = u16::from_le_bytes([memory[0xfffe], memory[0xffff]]);
 
+        bus.memory = memory;
+
         Cpu {
-            memory,
+            // memory,
             pc: reset_vector,
             a: 0,
             x: 0,
@@ -1733,11 +1822,13 @@ impl Cpu {
             nmi_vector,
             reset_vector,
             irq_vector,
+
+            bus: bus,
         }
     }
 
     pub fn get_memory_buffer(&self) -> &MemoryBuffer {
-        &self.memory
+        &self.bus.memory
     }
 }
 
@@ -1745,7 +1836,7 @@ impl Iterator for Cpu {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let value = self.memory[self.pc as usize];
+        let value = self.bus.read_address(self.pc);
         self.pc += 1;
 
         return Some(value);

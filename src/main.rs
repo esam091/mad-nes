@@ -1,5 +1,6 @@
 use std::{collections::HashSet, convert::TryInto, env, io, time::Duration};
 
+mod bus;
 mod cpu;
 mod ines;
 mod instruction;
@@ -7,8 +8,9 @@ mod machine;
 mod ppu;
 mod render;
 
+use bus::JoypadButton;
 use cpu::MemoryBuffer;
-use machine::{JoypadButton, Machine};
+use machine::Machine;
 use ppu::VideoMemoryBuffer;
 use render::Renderer;
 
