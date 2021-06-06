@@ -1,12 +1,10 @@
-use std::ops::{BitAnd, BitAndAssign, BitOr};
+use std::ops::{BitAnd, BitOr};
 
 use crate::{
-    bus::{BusTrait, RealBus},
+    bus::{BusTrait, MemoryBuffer, RealBus},
     ines::InesRom,
     instruction::Instruction,
 };
-
-pub type MemoryBuffer = [u8; 0x10000];
 
 #[derive(Debug)]
 pub enum SideEffect {

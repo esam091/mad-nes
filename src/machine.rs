@@ -1,8 +1,8 @@
 use std::{collections::HashSet, u8};
 
 use crate::{
-    bus::{BusTrait, JoypadButton, JoypadState, RealBus},
-    cpu::{self, Cpu, MemoryBuffer},
+    bus::{JoypadButton, JoypadState, MemoryBuffer, RealBus},
+    cpu::Cpu,
     ppu::Ppu,
 };
 use crate::{ines::InesRom, ppu::VideoMemoryBuffer};

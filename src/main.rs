@@ -8,8 +8,7 @@ mod machine;
 mod ppu;
 mod render;
 
-use bus::JoypadButton;
-use cpu::MemoryBuffer;
+use bus::{JoypadButton, MemoryBuffer};
 use machine::Machine;
 use ppu::VideoMemoryBuffer;
 use render::Renderer;

@@ -12,7 +12,7 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::{ColorPalette, DrawPriority, PatternTableSelection, Ppu};
+use crate::ppu::{DrawPriority, PatternTableSelection, Ppu};
 
 const COLOR_KEY: Color = Color::RGBA(3, 3, 3, 3);
 
