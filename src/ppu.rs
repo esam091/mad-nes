@@ -1,9 +1,18 @@
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum AddressLatch {
-    Low,
-    High,
+enum WriteLatch {
+    One,
+    Zero,
+}
+
+impl WriteLatch {
+    fn flip(&mut self) {
+        match self {
+            WriteLatch::Zero => *self = WriteLatch::One,
+            WriteLatch::One => *self = WriteLatch::Zero,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -32,13 +41,15 @@ pub struct SpriteData {
 #[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
-    current_address: u16,
-    address_latch: AddressLatch,
-    high_address_byte: u8,
+    write_latch: WriteLatch,
 
     current_oam_address: u8,
     oam_data: [u8; 256],
     control_flag: u8,
+
+    x: u8,
+    t: u16,
+    v: u16,
 }
 
 pub struct ColorPalette {
@@ -51,21 +62,24 @@ impl Ppu {
     pub fn new(memory: VideoMemoryBuffer) -> Ppu {
         Ppu {
             memory,
-            current_address: 0,
-            address_latch: AddressLatch::High,
-            high_address_byte: 0,
+            write_latch: WriteLatch::Zero,
             current_oam_address: 0,
             oam_data: [0; 256],
             control_flag: 0,
+
+            x: 0,
+            t: 0,
+            v: 0,
         }
     }
 
     pub fn set_control_flag(&mut self, value: u8) {
         self.control_flag = value;
+        self.t |= (value as u16 & 0b11) << 10;
     }
 
     pub fn clear_address_latch(&mut self) {
-        self.address_latch = AddressLatch::High;
+        self.write_latch = WriteLatch::Zero;
     }
 
     pub fn set_oam_address(&mut self, address: u8) {
@@ -78,13 +92,31 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8) {
-        self.memory[self.current_address as usize] = data;
+        self.memory[self.v as usize] = data;
 
         if self.control_flag & 0b00000100 != 0 {
-            self.current_address = self.current_address.wrapping_add(32);
+            self.v = self.v.wrapping_add(32);
         } else {
-            self.current_address = self.current_address.wrapping_add(1);
+            self.v = self.v.wrapping_add(1);
         }
+    }
+
+    pub fn write_scroll(&mut self, data: u8) {
+        match self.write_latch {
+            WriteLatch::One => {
+                self.x = data & 0b00000111;
+                self.t |= (data >> 3) as u16;
+            }
+
+            WriteLatch::Zero => {
+                let coarse_y = (data >> 3) as u16;
+                let fine_y = (data & 0b00000111) as u16;
+
+                self.t |= coarse_y << 5 | fine_y << 12;
+            }
+        }
+
+        self.write_latch.flip();
     }
 
     pub fn copy_oam_data(&mut self, data: &[u8]) {
@@ -142,17 +174,21 @@ impl Ppu {
     }
 
     pub fn write_address(&mut self, byte: u8) {
-        match self.address_latch {
-            AddressLatch::High => {
-                self.address_latch = AddressLatch::Low;
-                self.high_address_byte = byte;
+        match self.write_latch {
+            WriteLatch::Zero => {
+                let value = byte & 0b00111111;
+                self.t &= 0xff;
+                self.t |= (value as u16) << 8;
             }
 
-            AddressLatch::Low => {
-                self.address_latch = AddressLatch::High;
-                self.current_address = u16::from_le_bytes([byte, self.high_address_byte]);
+            WriteLatch::One => {
+                self.t &= 0xff00;
+                self.t |= byte as u16;
+                self.v = self.t;
             }
         }
+
+        self.write_latch.flip();
     }
 
     pub fn get_buffer(&self) -> &VideoMemoryBuffer {

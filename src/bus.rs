@@ -84,6 +84,7 @@ impl BusTrait for RealBus {
                 self.ppu.set_control_flag(value);
                 self.memory[address as usize] = value;
             }
+            0x2005 => self.ppu.write_scroll(value),
             0x2006 => self.ppu.write_address(value),
             0x2007 => self.ppu.write_data(value),
             0x2003 => self.ppu.set_oam_address(value),
