@@ -1,4 +1,9 @@
-use std::{collections::HashSet, convert::TryInto, env, io, time::Duration};
+use std::{
+    collections::HashSet,
+    convert::TryInto,
+    env, io,
+    time::{Duration, SystemTime},
+};
 
 mod bus;
 mod cpu;
@@ -207,7 +212,10 @@ fn main() -> Result<(), String> {
             // dbg!(&active_buttons);
             machine.set_active_buttons(active_buttons);
 
+            let frame_start = SystemTime::now();
             renderer.render(&machine.get_ppu());
+            let frame_duration = SystemTime::now().duration_since(frame_start).unwrap();
+            dbg!(frame_duration);
 
             frame_counter += 1;
 

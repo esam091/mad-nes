@@ -67,11 +67,11 @@ impl Cpu {
     pub fn enter_vblank(&mut self) {
         // TODO: fix 0x2002 access
         // self.memory[0x2002] |= 0x80;
-        let value = self.bus.read_address(0x2002) | 0x80;
-        self.bus.write_address(0x2002, value);
+        // let value = self.bus.read_address(0x2002) | 0x80;
+        self.bus.write_address(0x2002, 0x80);
 
         if self.bus.read_address(0x2000) & 0x80 != 0 {
-            // println!("Enter vblank");
+            println!("Enter vblank");
 
             let addresses = self.pc.to_le_bytes();
             self.push(addresses[1]);
@@ -82,8 +82,9 @@ impl Cpu {
     }
 
     pub fn exit_vblank(&mut self) {
-        let value = self.bus.read_address(0x2002) & !0x80;
-        self.bus.write_address(0x2002, value);
+        // println!("Exit vblank");
+        // let value = self.bus.read_address(0x2002) & !0x80;
+        self.bus.write_address(0x2002, 0);
     }
 
     pub fn step(&mut self) -> CpuResult {

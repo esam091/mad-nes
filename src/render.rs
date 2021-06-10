@@ -388,132 +388,105 @@ impl<'a> Renderer<'a> {
 
         let start_time = std::time::SystemTime::now();
 
-        let left_pattern_bank = PatternBank::new(
-            ppu.left_pattern_table(),
-            &background_color_sets,
-            &sprite_color_sets,
-            self.texture_creator,
-        );
+        // let left_pattern_bank = PatternBank::new(
+        //     ppu.left_pattern_table(),
+        //     &background_color_sets,
+        //     &sprite_color_sets,
+        //     self.texture_creator,
+        // );
 
-        let right_pattern_bank = PatternBank::new(
-            ppu.right_pattern_table(),
-            &background_color_sets,
-            &sprite_color_sets,
-            self.texture_creator,
-        );
+        // let right_pattern_bank = PatternBank::new(
+        //     ppu.right_pattern_table(),
+        //     &background_color_sets,
+        //     &sprite_color_sets,
+        //     self.texture_creator,
+        // );
 
         let duration = std::time::SystemTime::now()
             .duration_since(start_time)
             .unwrap();
-        // println!("Tile generation duration: {:?}", duration);
+        // // println!("Tile generation duration: {:?}", duration);
 
-        let pattern_texture =
-            left_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
+        // // let pattern_texture =
+        // //     left_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
 
-        self.canvas
-            .with_texture_canvas(&mut self.left_pattern_texture, |canvas| {
-                canvas.copy(&pattern_texture, None, None).unwrap();
-            })
-            .unwrap();
+        // // self.canvas
+        // //     .with_texture_canvas(&mut self.left_pattern_texture, |canvas| {
+        // //         canvas.copy(&pattern_texture, None, None).unwrap();
+        // //     })
+        // //     .unwrap();
 
-        let pattern_texture =
-            right_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
+        // // let pattern_texture =
+        // //     right_pattern_bank.create_debug_texture(&mut self.canvas, self.texture_creator, 0);
 
-        self.canvas
-            .with_texture_canvas(&mut self.right_pattern_texture, |canvas| {
-                canvas.copy(&pattern_texture, None, None).unwrap();
-            })
-            .unwrap();
+        // // self.canvas
+        // //     .with_texture_canvas(&mut self.right_pattern_texture, |canvas| {
+        // //         canvas.copy(&pattern_texture, None, None).unwrap();
+        // //     })
+        // //     .unwrap();
 
-        let foreground_sprite_texture = &mut self.foreground_sprite_texture;
-        self.canvas
-            .with_texture_canvas(foreground_sprite_texture, |canvas| {
-                canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
-                canvas.clear();
+        // let foreground_sprite_texture = &mut self.foreground_sprite_texture;
+        // self.canvas
+        //     .with_texture_canvas(foreground_sprite_texture, |canvas| {
+        //         canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+        //         canvas.clear();
 
-                for sprite_data in ppu.get_oam_sprite_data() {
-                    if sprite_data.draw_priority == DrawPriority::Background {
-                        continue;
-                    }
+        //         for sprite_data in ppu.get_oam_sprite_data() {
+        //             if sprite_data.draw_priority == DrawPriority::Background {
+        //                 continue;
+        //             }
 
-                    let pattern_bank = match sprite_data.tile_pattern {
-                        PatternTableSelection::Left => &left_pattern_bank,
-                        PatternTableSelection::Right => &right_pattern_bank,
-                    };
+        //             let pattern_bank = match sprite_data.tile_pattern {
+        //                 PatternTableSelection::Left => &left_pattern_bank,
+        //                 PatternTableSelection::Right => &right_pattern_bank,
+        //             };
 
-                    pattern_bank.render_sprite_ex(
-                        canvas,
-                        sprite_data.tile_number,
-                        sprite_data.color_palette,
-                        Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
-                        sprite_data.flip_horizontal,
-                        sprite_data.flip_vertical,
-                    )
-                }
-            })
-            .unwrap();
+        //             pattern_bank.render_sprite_ex(
+        //                 canvas,
+        //                 sprite_data.tile_number,
+        //                 sprite_data.color_palette,
+        //                 Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
+        //                 sprite_data.flip_horizontal,
+        //                 sprite_data.flip_vertical,
+        //             )
+        //         }
+        //     })
+        //     .unwrap();
 
         let debug_texture = &self.debug_texture;
         let gameplay_texture = &mut self.gameplay_texture;
 
-        let current_pattern_bank = match ppu.current_background_pattern_table() {
-            PatternTableSelection::Left => &left_pattern_bank,
-            PatternTableSelection::Right => &right_pattern_bank,
-        };
+        let mut background_tile_pixels = [0u8; 256 * 240 * 4];
+        let frame = ppu.get_frame_buffer();
+
+        for y in 0..240 {
+            for x in 0..256 {
+                // dbg!(&index, &frame[index]);
+                let (r, g, b) = PALETTE[frame[y][x] as usize];
+
+                let start_index = (y * 256 + x) * 4;
+
+                background_tile_pixels[start_index] = b;
+                background_tile_pixels[start_index + 1] = g;
+                background_tile_pixels[start_index + 2] = r;
+            }
+        }
+
+        gameplay_texture
+            .update(Rect::new(0, 0, 256, 240), &background_tile_pixels, 256 * 4)
+            .unwrap();
+
+        // let current_pattern_bank = match ppu.current_background_pattern_table() {
+        //     PatternTableSelection::Left => &left_pattern_bank,
+        //     PatternTableSelection::Right => &right_pattern_bank,
+        // };
 
         self.canvas
             .with_texture_canvas(gameplay_texture, |canvas| {
-                let (r, g, b) = PALETTE[raw_palette.background as usize];
-
-                canvas.set_draw_color(Color::RGB(r, g, b));
-                canvas.clear();
-
-                let current_nametable = ppu.current_nametable_address();
-                let current_attribute_table = ppu.current_attribute_table_address();
-
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + current_nametable;
-
-                        let nametable_value = video_buffer[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (0, 1) => bottom_left,
-                            (1, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        current_pattern_bank.render_tile(
-                            canvas,
-                            nametable_value,
-                            palette_set_index,
-                            Rect::new(xx * 8, yy * 8, 8, 8),
-                        );
-                    }
-                }
-
+                // canvas.copy(&bego, None, None).unwrap();
                 canvas.copy(debug_texture, None, None).unwrap();
 
-                canvas.copy(foreground_sprite_texture, None, None).unwrap();
+                // canvas.copy(foreground_sprite_texture, None, None).unwrap();
             })
             .unwrap();
 

@@ -1,6 +1,8 @@
+use std::ops::BitAnd;
+
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum WriteLatch {
     One,
     Zero,
@@ -27,6 +29,18 @@ pub enum DrawPriority {
     Background,
 }
 
+fn hex_string(value: u16) -> String {
+    format!("{:#04X?}", value)
+}
+
+fn binary_string(value: u16) -> String {
+    format!("{:16b}", value)
+}
+
+fn hex_string8(value: u8) -> String {
+    format!("{:#02X?}", value)
+}
+
 pub struct SpriteData {
     pub x: u8,
     pub y: u8,
@@ -46,10 +60,13 @@ pub struct Ppu {
     current_oam_address: u8,
     oam_data: [u8; 256],
     control_flag: u8,
+    mask: u8,
 
     x: u8,
     t: u16,
     v: u16,
+
+    frame_buffer: [[u8; 256]; 240],
 }
 
 pub struct ColorPalette {
@@ -70,12 +87,22 @@ impl Ppu {
             x: 0,
             t: 0,
             v: 0,
+
+            frame_buffer: [[0; 256]; 240],
+            mask: 0,
         }
     }
 
     pub fn set_control_flag(&mut self, value: u8) {
         self.control_flag = value;
+        // dbg!(self.control_flag);
+        self.t &= !0xc00;
         self.t |= (value as u16 & 0b11) << 10;
+    }
+
+    pub fn set_mask(&mut self, value: u8) {
+        self.mask = value;
+        // dbg!(self.mask);
     }
 
     pub fn clear_address_latch(&mut self) {
@@ -92,7 +119,9 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8) {
+        println!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
         self.memory[self.v as usize] = data;
+        // dbg!(hex_string8(data), binary_string(self.v));
 
         if self.control_flag & 0b00000100 != 0 {
             self.v = self.v.wrapping_add(32);
@@ -101,21 +130,29 @@ impl Ppu {
         }
     }
 
-    pub fn write_scroll(&mut self, data: u8) {
+    pub fn write_scroll(&mut self, position: u8) {
+        println!("Write $2005({:?}): {:#02X?}", self.write_latch, position);
         match self.write_latch {
-            WriteLatch::One => {
-                self.x = data & 0b00000111;
-                self.t |= (data >> 3) as u16;
+            WriteLatch::Zero => {
+                self.x = position & 0b00000111;
+                self.t &= !0b11111;
+                self.t |= (position >> 3) as u16;
             }
 
-            WriteLatch::Zero => {
-                let coarse_y = (data >> 3) as u16;
-                let fine_y = (data & 0b00000111) as u16;
+            WriteLatch::One => {
+                let coarse_y = (position >> 3) as u16;
+                let fine_y = (position & 0b00000111) as u16;
 
+                self.t &= !0b111001111100000;
                 self.t |= coarse_y << 5 | fine_y << 12;
             }
         }
 
+        // dbg!(
+        //     // hex_string8(position),
+        //     // self.write_latch,
+        //     binary_string(self.t)
+        // );
         self.write_latch.flip();
     }
 
@@ -173,18 +210,21 @@ impl Ppu {
             .collect::<Vec<_>>()
     }
 
-    pub fn write_address(&mut self, byte: u8) {
+    pub fn write_address(&mut self, address: u8) {
+        // dbg!(hex_string8(address));
+        println!("Write $2006: {:#02X?}", address);
         match self.write_latch {
             WriteLatch::Zero => {
-                let value = byte & 0b00111111;
+                let value = address & 0b00111111;
                 self.t &= 0xff;
                 self.t |= (value as u16) << 8;
             }
 
             WriteLatch::One => {
                 self.t &= 0xff00;
-                self.t |= byte as u16;
+                self.t |= address as u16;
                 self.v = self.t;
+                // dbg!(binary_string(self.t));
             }
         }
 
@@ -259,5 +299,141 @@ impl Ppu {
                 ],
             ],
         }
+    }
+
+    pub fn fill_buffer(&mut self) {
+        if self.mask & 0b1000 == 0 {
+            return;
+        }
+
+        // println!("fill buffer!");
+        // 0 yyy NN YYYYY XXXXX
+        let start_fine_x = self.x;
+
+        self.v &= !0b111101111100000;
+        self.v |= self.t & 0b111101111100000;
+        // let fine_y = (self.v & 0x7000) >> 12;
+        // let xy = self.v & 0b1111111111;
+
+        // dbg!(
+        //     // start_fine_x,
+        //     hex_string(self.v),
+        //     fine_y,
+        //     xy
+        // );
+
+        let palette = self.get_color_palette();
+
+        for target_y in 0..240 {
+            let fine_y = (self.v & 0x7000) >> 12;
+            // dbg!(fine_y);
+
+            for target_x in 0..256 {
+                // render
+                let tile_address = 0x2000 | (self.v & 0xfff);
+
+                let coarse_x = self.v & 0b11111;
+                let coarse_y = (self.v >> 5) & 0b11111;
+                let tile_value = self.memory[tile_address as usize];
+                // dbg!(coarse_x, coarse_y, tile_value);
+
+                let attribute_address =
+                    0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
+                let attribute_value = self.memory[attribute_address as usize];
+                let subtile_y = (coarse_y % 4) / 2;
+                let subtile_x = (coarse_x % 4) / 2;
+
+                // println!(
+                //     "attribute at {:#02?},{:#02?}, nametable = {:#04X?}, address = {:#04X?}, value = {:#02X?}",
+                //     coarse_y, coarse_x, tile_address, attribute_address, attribute_value
+                // );
+
+                let palette_set_index = match (subtile_x, subtile_y) {
+                    (0, 0) => attribute_value & 0b11,
+                    (1, 0) => attribute_value.bitand(0b1100 as u8) >> 2,
+                    (0, 1) => attribute_value.bitand(0b110000 as u8) >> 4,
+                    (1, 1) => attribute_value.bitand(0b11000000 as u8) >> 6,
+                    _ => panic!("Impossible subtile location!"),
+                };
+
+                let palette_value = palette.background_color_set[palette_set_index as usize];
+
+                // dbg!(
+                //     // hex_string(tile_address),
+                //     // tile_value,
+                //     coarse_x, // self.x,
+                //     coarse_y, fine_y
+                // );
+
+                let pattern_address = tile_value as u16 * 0x10 + fine_y;
+
+                let pattern_table = match self.current_background_pattern_table() {
+                    PatternTableSelection::Left => self.left_pattern_table(),
+                    PatternTableSelection::Right => self.right_pattern_table(),
+                };
+
+                let pattern1 = pattern_table[pattern_address as usize];
+                let pattern2 = pattern_table[pattern_address as usize + 8];
+
+                let shift = 7 - self.x;
+
+                let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
+
+                // dbg!(bit);
+
+                let color: u8 = if bit == 0 {
+                    palette.background
+                } else {
+                    palette_value[bit as usize - 1]
+                };
+
+                self.frame_buffer[target_y][target_x] = color;
+
+                // move x
+                if self.x == 7 {
+                    self.x = 0;
+
+                    if (self.v & 0x001F) == 31 {
+                        self.v &= !0x001f;
+                        self.v ^= 0x400;
+                    } else {
+                        self.v += 1;
+                    }
+                } else {
+                    self.x += 1;
+                }
+            }
+
+            self.x = start_fine_x;
+
+            self.v &= !0b10000011111;
+            self.v |= self.t & 0b10000011111;
+
+            // dbg!(hex_string(self.v), binary_string(self.v));
+
+            if self.v & 0x7000 != 0x7000 {
+                self.v += 0x1000;
+            } else {
+                self.v &= !0x7000;
+                let mut y = (self.v & 0x03E0) >> 5;
+
+                if y == 29 {
+                    y = 0;
+                    self.v ^= 0x0800;
+                } else if y == 31 {
+                    y = 0;
+                } else {
+                    y += 1;
+                }
+
+                self.v = (self.v & !0x03E0) | (y << 5);
+            }
+        }
+
+        // dbg!(binary_string(self.v), binary_string(self.t));
+    }
+
+    pub fn get_frame_buffer(&self) -> &[[u8; 256]; 240] {
+        &self.frame_buffer
     }
 }

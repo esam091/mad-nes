@@ -40,6 +40,7 @@ impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
         match address {
             0x2002 => {
+                println!("Read $2002: {}", self.memory[address as usize]);
                 self.ppu.clear_address_latch();
                 return self.memory[address as usize];
             }
@@ -81,8 +82,12 @@ impl BusTrait for RealBus {
     fn write_address(&mut self, address: u16, value: u8) {
         match address {
             0x2000 => {
+                println!("Write $2000: {:#02X?}", value);
                 self.ppu.set_control_flag(value);
                 self.memory[address as usize] = value;
+            }
+            0x2001 => {
+                self.ppu.set_mask(value);
             }
             0x2005 => self.ppu.write_scroll(value),
             0x2006 => self.ppu.write_address(value),
