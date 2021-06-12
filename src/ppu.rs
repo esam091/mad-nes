@@ -67,6 +67,8 @@ pub struct Ppu {
     t: u16,
     v: u16,
 
+    current_scanline: u32,
+
     frame_buffer: [[u8; 256]; 240],
 }
 
@@ -93,6 +95,8 @@ impl Ppu {
             mask: 0,
 
             status: PpuStatus::empty(),
+
+            current_scanline: 0,
         }
     }
 
