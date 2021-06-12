@@ -13,3 +13,4 @@ log_ppu = []
 tui = "0.14"
 termion = "1.5"
 sdl2 = "0.34"
+bitflags = "1.2.1"

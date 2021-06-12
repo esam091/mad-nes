@@ -2,6 +2,8 @@ use std::ops::BitAnd;
 
 use crate::log_ppu;
 
+use bitflags::bitflags;
+
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -42,10 +44,19 @@ pub struct SpriteData {
     pub flip_vertical: bool,
 }
 
+bitflags! {
+    pub struct PpuStatus: u8 {
+        const IN_VBLANK = 0b10000000;
+        const SPRITE_0_HIT = 0b01000000;
+        const SPRITE_OVERFLOW = 0b00100000;
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
     write_latch: WriteLatch,
+    status: PpuStatus,
 
     current_oam_address: u8,
     oam_data: [u8; 256],
@@ -80,7 +91,21 @@ impl Ppu {
 
             frame_buffer: [[0; 256]; 240],
             mask: 0,
+
+            status: PpuStatus::empty(),
         }
+    }
+
+    pub fn enter_vblank(&mut self) {
+        self.status.insert(PpuStatus::IN_VBLANK);
+    }
+
+    pub fn exit_vblank(&mut self) {
+        self.status.remove(PpuStatus::IN_VBLANK);
+    }
+
+    pub fn get_status(&self) -> PpuStatus {
+        self.status
     }
 
     pub fn set_control_flag(&mut self, value: u8) {

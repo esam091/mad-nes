@@ -51,13 +51,14 @@ impl Machine {
 
         match self.cycle_counter.advance(result.cycles_elapsed) {
             Some(CycleOutput::EnterVblank) => {
-                self.cpu.enter_vblank();
+                self.cpu.bus.ppu.enter_vblank();
+                self.cpu.enter_nmi_if_needed();
                 self.cpu.bus.ppu.fill_buffer();
                 return Some(SideEffect::Render);
             }
 
             Some(CycleOutput::ExitVblank) => {
-                self.cpu.exit_vblank();
+                self.cpu.bus.ppu.exit_vblank();
                 return None;
             }
 

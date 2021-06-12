@@ -42,7 +42,7 @@ impl BusTrait for RealBus {
             0x2002 => {
                 log_ppu!("Read $2002: {}", self.memory[address as usize]);
                 self.ppu.clear_address_latch();
-                return self.memory[address as usize];
+                return self.ppu.get_status().bits();
             }
             0x4016 => {
                 let value: u8 = match self.joypad_state {
@@ -82,7 +82,6 @@ impl BusTrait for RealBus {
     fn write_address(&mut self, address: u16, value: u8) {
         match address {
             0x2000 => {
-                println!("Write $2000: {:#02X?}", value);
                 self.ppu.set_control_flag(value);
                 self.memory[address as usize] = value;
             }

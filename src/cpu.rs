@@ -64,12 +64,7 @@ impl Cpu {
         }
     }
 
-    pub fn enter_vblank(&mut self) {
-        // TODO: fix 0x2002 access
-        // self.memory[0x2002] |= 0x80;
-        // let value = self.bus.read_address(0x2002) | 0x80;
-        self.bus.write_address(0x2002, 0x80);
-
+    pub fn enter_nmi_if_needed(&mut self) {
         if self.bus.read_address(0x2000) & 0x80 != 0 {
             println!("Enter vblank");
 
@@ -79,12 +74,6 @@ impl Cpu {
             self.push(self.p.bitand(!(1 << 5)));
             self.pc = self.nmi_vector;
         }
-    }
-
-    pub fn exit_vblank(&mut self) {
-        // println!("Exit vblank");
-        // let value = self.bus.read_address(0x2002) & !0x80;
-        self.bus.write_address(0x2002, 0);
     }
 
     pub fn step(&mut self) -> CpuResult {
@@ -673,22 +662,9 @@ impl Cpu {
             }
 
             Instruction::LdaAbsolute(address) => {
-                if address == 0x4016 {
-                    self.a = self.bus.read_address(address);
-                } else {
-                    self.a = self.bus.read_address(address);
-                }
+                self.a = self.bus.read_address(address);
                 self.toggle_zero_negative_flag(self.a);
 
-                if address == 0x2002 {
-                    let new_value = self.bus.read_address(0x2002) & !0x80;
-                    self.bus.write_address(0x2002, new_value);
-
-                    return CpuResult {
-                        cycles_elapsed: 4,
-                        side_effect: Some(SideEffect::ClearAddressLatch),
-                    };
-                }
                 cycles(4)
             }
 
