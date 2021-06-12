@@ -1,5 +1,7 @@
 use std::ops::BitAnd;
 
+use crate::log_ppu;
+
 pub type VideoMemoryBuffer = [u8; 0x4000];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -27,18 +29,6 @@ pub enum PatternTableSelection {
 pub enum DrawPriority {
     Foreground,
     Background,
-}
-
-fn hex_string(value: u16) -> String {
-    format!("{:#04X?}", value)
-}
-
-fn binary_string(value: u16) -> String {
-    format!("{:16b}", value)
-}
-
-fn hex_string8(value: u8) -> String {
-    format!("{:#02X?}", value)
 }
 
 pub struct SpriteData {
@@ -94,6 +84,7 @@ impl Ppu {
     }
 
     pub fn set_control_flag(&mut self, value: u8) {
+        log_ppu!("Write $2000: {:#02X?}", value);
         self.control_flag = value;
         // dbg!(self.control_flag);
         self.t &= !0xc00;
@@ -119,9 +110,9 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8) {
-        println!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
+        log_ppu!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
+
         self.memory[self.v as usize] = data;
-        // dbg!(hex_string8(data), binary_string(self.v));
 
         if self.control_flag & 0b00000100 != 0 {
             self.v = self.v.wrapping_add(32);
@@ -131,7 +122,7 @@ impl Ppu {
     }
 
     pub fn write_scroll(&mut self, position: u8) {
-        println!("Write $2005({:?}): {:#02X?}", self.write_latch, position);
+        log_ppu!("Write $2005({:?}): {:#02X?}", self.write_latch, position);
         match self.write_latch {
             WriteLatch::Zero => {
                 self.x = position & 0b00000111;
@@ -148,11 +139,6 @@ impl Ppu {
             }
         }
 
-        // dbg!(
-        //     // hex_string8(position),
-        //     // self.write_latch,
-        //     binary_string(self.t)
-        // );
         self.write_latch.flip();
     }
 
@@ -211,8 +197,7 @@ impl Ppu {
     }
 
     pub fn write_address(&mut self, address: u8) {
-        // dbg!(hex_string8(address));
-        println!("Write $2006: {:#02X?}", address);
+        log_ppu!("Write $2006: {:#02X?}", address);
         match self.write_latch {
             WriteLatch::Zero => {
                 let value = address & 0b00111111;
@@ -224,7 +209,6 @@ impl Ppu {
                 self.t &= 0xff00;
                 self.t |= address as u16;
                 self.v = self.t;
-                // dbg!(binary_string(self.t));
             }
         }
 
@@ -306,27 +290,15 @@ impl Ppu {
             return;
         }
 
-        // println!("fill buffer!");
-        // 0 yyy NN YYYYY XXXXX
         let start_fine_x = self.x;
 
         self.v &= !0b111101111100000;
         self.v |= self.t & 0b111101111100000;
-        // let fine_y = (self.v & 0x7000) >> 12;
-        // let xy = self.v & 0b1111111111;
-
-        // dbg!(
-        //     // start_fine_x,
-        //     hex_string(self.v),
-        //     fine_y,
-        //     xy
-        // );
 
         let palette = self.get_color_palette();
 
         for target_y in 0..240 {
             let fine_y = (self.v & 0x7000) >> 12;
-            // dbg!(fine_y);
 
             for target_x in 0..256 {
                 // render
@@ -335,18 +307,12 @@ impl Ppu {
                 let coarse_x = self.v & 0b11111;
                 let coarse_y = (self.v >> 5) & 0b11111;
                 let tile_value = self.memory[tile_address as usize];
-                // dbg!(coarse_x, coarse_y, tile_value);
 
                 let attribute_address =
                     0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
                 let attribute_value = self.memory[attribute_address as usize];
                 let subtile_y = (coarse_y % 4) / 2;
                 let subtile_x = (coarse_x % 4) / 2;
-
-                // println!(
-                //     "attribute at {:#02?},{:#02?}, nametable = {:#04X?}, address = {:#04X?}, value = {:#02X?}",
-                //     coarse_y, coarse_x, tile_address, attribute_address, attribute_value
-                // );
 
                 let palette_set_index = match (subtile_x, subtile_y) {
                     (0, 0) => attribute_value & 0b11,

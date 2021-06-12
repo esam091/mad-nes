@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::ppu::Ppu;
+use crate::{log_ppu, ppu::Ppu};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum JoypadState {
@@ -40,7 +40,7 @@ impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
         match address {
             0x2002 => {
-                println!("Read $2002: {}", self.memory[address as usize]);
+                log_ppu!("Read $2002: {}", self.memory[address as usize]);
                 self.ppu.clear_address_latch();
                 return self.memory[address as usize];
             }

@@ -12,6 +12,7 @@ mod instruction;
 mod machine;
 mod ppu;
 mod render;
+mod utils;
 
 use bus::{JoypadButton, MemoryBuffer};
 use machine::Machine;
