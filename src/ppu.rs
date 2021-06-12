@@ -377,7 +377,7 @@ impl Ppu {
                 // dbg!(bit);
 
                 let color: u8 = if bit == 0 {
-                    palette.background
+                    0xff
                 } else {
                     palette_value[bit as usize - 1]
                 };
