@@ -105,12 +105,6 @@ impl Ppu {
     }
 
     pub fn get_status(&mut self) -> PpuStatus {
-        if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
-            if self.current_scanline == 169 {
-                self.status.insert(PpuStatus::SPRITE_0_HIT);
-            }
-        }
-
         self.status
     }
 
@@ -423,6 +417,8 @@ impl Ppu {
 
                 // dbg!(hex_string(self.v), binary_string(self.v));
 
+                self.toggle_sprite_0_hit_if_needed();
+
                 if self.v & 0x7000 != 0x7000 {
                     self.v += 0x1000;
                 } else {
@@ -448,6 +444,42 @@ impl Ppu {
         }
 
         self.current_scanline = (self.current_scanline + 1) % 262;
+    }
+
+    fn toggle_sprite_0_hit_if_needed(&mut self) {
+        if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
+            // todo: handle 8 x 16 sprites
+
+            let sprite_y = self.oam_data[0] as u32;
+            let sprite_x = self.oam_data[3];
+
+            if self.current_scanline < sprite_y || self.current_scanline > sprite_y + 7 {
+                return;
+            }
+
+            let sprite_fine_y = self.current_scanline - sprite_y;
+
+            let pattern_table = if self.control_flag & 8 != 0 {
+                self.right_pattern_table()
+            } else {
+                self.left_pattern_table()
+            };
+
+            let tile = self.oam_data[1];
+            let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
+            let left_tile = pattern_table[pattern_row];
+            let right_tile = pattern_table[pattern_row + 8];
+
+            for i in 0..8 {
+                let x = sprite_x + i;
+
+                if self.frame_buffer[self.current_scanline as usize][x as usize] != 0xff
+                    && (left_tile & (1 << x) != 0 || right_tile & (1 << x) != 0)
+                {
+                    self.status.insert(PpuStatus::SPRITE_0_HIT);
+                }
+            }
+        }
     }
 
     pub fn get_frame_buffer(&self) -> &[[u8; 256]; 240] {
