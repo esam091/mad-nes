@@ -317,7 +317,7 @@ impl Ppu {
     pub fn advance_scanline(&mut self) {
         match self.current_scanline {
             261 => {
-                self.status.insert(PpuStatus::IN_VBLANK);
+                self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
                 if self.mask & 0b1000 == 0 {
