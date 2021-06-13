@@ -67,6 +67,8 @@ pub struct Ppu {
     control_flag: u8,
     mask: u8,
 
+    read_buffer: u8,
+
     x: u8,
     t: u16,
     v: u16,
@@ -95,6 +97,8 @@ impl Ppu {
             t: 0,
             v: 0,
 
+            read_buffer: 0,
+
             frame_buffer: [[0; 256]; 240],
             mask: 0,
 
@@ -109,7 +113,7 @@ impl Ppu {
     }
 
     pub fn set_control_flag(&mut self, value: u8) {
-        log_ppu!("Write $2000: {:#02X?}", value);
+        log_ppu!("Write $2000: {:#08b}", value);
         self.control_flag = value;
         // dbg!(self.control_flag);
         self.t &= !0xc00;
@@ -117,6 +121,7 @@ impl Ppu {
     }
 
     pub fn set_mask(&mut self, value: u8) {
+        log_ppu!("Write $2001: {:#08b}", value);
         self.mask = value;
         // dbg!(self.mask);
     }
@@ -132,6 +137,22 @@ impl Ppu {
     pub fn write_oam_data(&mut self, data: u8) {
         self.oam_data[self.current_oam_address as usize] = data;
         self.current_oam_address += 1;
+    }
+
+    pub fn read_data(&mut self) -> u8 {
+        // todo: palette read should not be buffered
+        let last_buffer = self.read_buffer;
+        log_ppu!("Read $2007: {:#02X?}", last_buffer);
+
+        self.read_buffer = self.memory[self.v as usize];
+
+        if self.control_flag & 0b00000100 != 0 {
+            self.v = self.v.wrapping_add(32);
+        } else {
+            self.v = self.v.wrapping_add(1);
+        }
+
+        last_buffer
     }
 
     pub fn write_data(&mut self, data: u8) {

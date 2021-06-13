@@ -44,6 +44,7 @@ impl BusTrait for RealBus {
                 self.ppu.clear_address_latch();
                 return self.ppu.get_status().bits();
             }
+            0x2007 => self.ppu.read_data(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
