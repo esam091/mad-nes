@@ -3,6 +3,7 @@ use std::{collections::HashSet, u8};
 use crate::{
     bus::{JoypadButton, JoypadState, MemoryBuffer, RealBus},
     cpu::Cpu,
+    log_ppu,
     ppu::Ppu,
 };
 use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
@@ -52,6 +53,7 @@ impl Machine {
             if self.cpu.bus.ppu.get_current_scanline() == 242
                 && self.cpu.bus.ppu.is_rendering_enabled()
             {
+                log_ppu!("Enter vblank");
                 self.cpu.enter_nmi();
             }
 

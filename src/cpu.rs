@@ -65,8 +65,6 @@ impl Cpu {
     }
 
     pub fn enter_nmi(&mut self) {
-        println!("Enter vblank");
-
         let addresses = self.pc.to_le_bytes();
         self.push(addresses[1]);
         self.push(addresses[0]);
