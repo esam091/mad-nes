@@ -49,7 +49,9 @@ impl Machine {
                 return Some(SideEffect::Render);
             }
 
-            if self.cpu.bus.ppu.get_current_scanline() == 242 {
+            if self.cpu.bus.ppu.get_current_scanline() == 242
+                && self.cpu.bus.ppu.is_rendering_enabled()
+            {
                 self.cpu.enter_nmi();
             }
 

@@ -485,4 +485,8 @@ impl Ppu {
     pub fn get_frame_buffer(&self) -> &[[u8; 256]; 240] {
         &self.frame_buffer
     }
+
+    pub fn is_rendering_enabled(&self) -> bool {
+        self.control_flag & 0x80 != 0
+    }
 }
