@@ -52,6 +52,10 @@ bitflags! {
     }
 }
 
+pub enum ScanlineEffect {
+    EnterVblank,
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
@@ -98,14 +102,6 @@ impl Ppu {
 
             current_scanline: 261,
         }
-    }
-
-    pub fn enter_vblank(&mut self) {
-        self.status.insert(PpuStatus::IN_VBLANK);
-    }
-
-    pub fn exit_vblank(&mut self) {
-        self.status.remove(PpuStatus::IN_VBLANK);
     }
 
     pub fn get_status(&self) -> PpuStatus {

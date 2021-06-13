@@ -13,8 +13,6 @@ pub enum SideEffect {
 
 #[derive(PartialEq, Eq)]
 pub struct Machine {
-    cycles: u32,
-    old_cycle_counter: CycleCounter,
     cpu: Cpu,
     cycle_counter: ScanlineCycleCounter,
 }
@@ -27,8 +25,6 @@ impl Machine {
         let mut video_memory = [0; 0x4000];
         video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
 
-        let cycle_counter = CycleCounter::power_on();
-
         let bus = RealBus {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
@@ -38,9 +34,6 @@ impl Machine {
 
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
-            cycles: 0,
-            old_cycle_counter: cycle_counter,
-
             cpu: Cpu::load(&rom, bus),
             cycle_counter: ScanlineCycleCounter::new(),
         });
@@ -52,11 +45,11 @@ impl Machine {
         if self.cycle_counter.advance(result.cycles_elapsed) {
             self.cpu.bus.ppu.advance_scanline();
 
-            if self.cpu.bus.ppu.get_current_scanline() == 240 {
+            if self.cpu.bus.ppu.get_current_scanline() == 241 {
                 return Some(SideEffect::Render);
             }
 
-            if self.cpu.bus.ppu.get_current_scanline() == 241 {
+            if self.cpu.bus.ppu.get_current_scanline() == 242 {
                 self.cpu.enter_nmi_if_needed();
             }
 
