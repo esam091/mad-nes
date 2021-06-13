@@ -14,10 +14,9 @@ pub enum SideEffect {
 #[derive(PartialEq, Eq)]
 pub struct Machine {
     cycles: u32,
-    cycle_counter: CycleCounter,
+    old_cycle_counter: CycleCounter,
     cpu: Cpu,
-    // ppu: Ppu,
-    // bus: RealBus,
+    cycle_counter: ScanlineCycleCounter,
 }
 
 impl Machine {
@@ -40,32 +39,30 @@ impl Machine {
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
             cycles: 0,
-            cycle_counter,
+            old_cycle_counter: cycle_counter,
 
             cpu: Cpu::load(&rom, bus),
+            cycle_counter: ScanlineCycleCounter::new(),
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
         let result = self.cpu.step();
 
-        match self.cycle_counter.advance(result.cycles_elapsed) {
-            Some(CycleOutput::EnterVblank) => {
-                self.cpu.bus.ppu.enter_vblank();
-                self.cpu.enter_nmi_if_needed();
-                self.cpu.bus.ppu.fill_buffer();
+        if self.cycle_counter.advance(result.cycles_elapsed) {
+            self.cpu.bus.ppu.advance_scanline();
+
+            if self.cpu.bus.ppu.get_current_scanline() == 240 {
                 return Some(SideEffect::Render);
             }
 
-            Some(CycleOutput::ExitVblank) => {
-                self.cpu.bus.ppu.exit_vblank();
-                return None;
+            if self.cpu.bus.ppu.get_current_scanline() == 241 {
+                self.cpu.enter_nmi_if_needed();
             }
 
-            _ => {
-                return None;
-            }
+            return None;
         }
+        None
     }
 
     pub fn get_buffer(&self) -> &MemoryBuffer {
@@ -86,6 +83,29 @@ impl Machine {
 
     pub fn set_active_buttons(&mut self, buttons: HashSet<JoypadButton>) {
         self.cpu.bus.active_buttons = buttons;
+    }
+}
+
+#[derive(PartialEq, Eq)]
+struct ScanlineCycleCounter {
+    scanline_cycles_left: u32,
+}
+
+impl ScanlineCycleCounter {
+    fn advance(&mut self, cycles: u32) -> bool {
+        if cycles >= self.scanline_cycles_left {
+            self.scanline_cycles_left = 113 + self.scanline_cycles_left - cycles;
+            return true;
+        } else {
+            self.scanline_cycles_left -= cycles;
+            return false;
+        }
+    }
+
+    fn new() -> ScanlineCycleCounter {
+        ScanlineCycleCounter {
+            scanline_cycles_left: 113,
+        }
     }
 }
 

@@ -96,7 +96,7 @@ impl Ppu {
 
             status: PpuStatus::empty(),
 
-            current_scanline: 0,
+            current_scanline: 261,
         }
     }
 
@@ -319,113 +319,142 @@ impl Ppu {
             return;
         }
 
-        let start_fine_x = self.x;
+        for _ in 0..262 {
+            self.advance_scanline();
+        }
+    }
 
-        self.v &= !0b111101111100000;
-        self.v |= self.t & 0b111101111100000;
+    pub fn get_current_scanline(&self) -> u32 {
+        self.current_scanline
+    }
 
-        let palette = self.get_color_palette();
+    pub fn advance_scanline(&mut self) {
+        match self.current_scanline {
+            261 => {
+                self.status.insert(PpuStatus::IN_VBLANK);
 
-        for target_y in 0..240 {
-            let fine_y = (self.v & 0x7000) >> 12;
+                if self.mask & 0b1000 == 0 {
+                    self.current_scanline = (self.current_scanline + 1) % 262;
 
-            for target_x in 0..256 {
-                // render
-                let tile_address = 0x2000 | (self.v & 0xfff);
+                    return;
+                }
+                self.v &= !0b111101111100000;
+                self.v |= self.t & 0b111101111100000;
+            }
+            0..=239 => {
+                if self.mask & 0b1000 == 0 {
+                    self.current_scanline = (self.current_scanline + 1) % 262;
 
-                let coarse_x = self.v & 0b11111;
-                let coarse_y = (self.v >> 5) & 0b11111;
-                let tile_value = self.memory[tile_address as usize];
+                    return;
+                }
 
-                let attribute_address =
-                    0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
-                let attribute_value = self.memory[attribute_address as usize];
-                let subtile_y = (coarse_y % 4) / 2;
-                let subtile_x = (coarse_x % 4) / 2;
+                let palette = self.get_color_palette();
+                let start_fine_x = self.x;
+                let fine_y = (self.v & 0x7000) >> 12;
+                for target_x in 0..256 {
+                    // render
+                    let tile_address = 0x2000 | (self.v & 0xfff);
 
-                let palette_set_index = match (subtile_x, subtile_y) {
-                    (0, 0) => attribute_value & 0b11,
-                    (1, 0) => attribute_value.bitand(0b1100 as u8) >> 2,
-                    (0, 1) => attribute_value.bitand(0b110000 as u8) >> 4,
-                    (1, 1) => attribute_value.bitand(0b11000000 as u8) >> 6,
-                    _ => panic!("Impossible subtile location!"),
-                };
+                    let coarse_x = self.v & 0b11111;
+                    let coarse_y = (self.v >> 5) & 0b11111;
+                    let tile_value = self.memory[tile_address as usize];
 
-                let palette_value = palette.background_color_set[palette_set_index as usize];
+                    let attribute_address = 0x23C0
+                        | (self.v & 0x0C00)
+                        | ((self.v >> 4) & 0x38)
+                        | ((self.v >> 2) & 0x07);
+                    let attribute_value = self.memory[attribute_address as usize];
+                    let subtile_y = (coarse_y % 4) / 2;
+                    let subtile_x = (coarse_x % 4) / 2;
 
-                // dbg!(
-                //     // hex_string(tile_address),
-                //     // tile_value,
-                //     coarse_x, // self.x,
-                //     coarse_y, fine_y
-                // );
+                    let palette_set_index = match (subtile_x, subtile_y) {
+                        (0, 0) => attribute_value & 0b11,
+                        (1, 0) => attribute_value.bitand(0b1100 as u8) >> 2,
+                        (0, 1) => attribute_value.bitand(0b110000 as u8) >> 4,
+                        (1, 1) => attribute_value.bitand(0b11000000 as u8) >> 6,
+                        _ => panic!("Impossible subtile location!"),
+                    };
 
-                let pattern_address = tile_value as u16 * 0x10 + fine_y;
+                    let palette_value = palette.background_color_set[palette_set_index as usize];
 
-                let pattern_table = match self.current_background_pattern_table() {
-                    PatternTableSelection::Left => self.left_pattern_table(),
-                    PatternTableSelection::Right => self.right_pattern_table(),
-                };
+                    // dbg!(
+                    //     // hex_string(tile_address),
+                    //     // tile_value,
+                    //     coarse_x, // self.x,
+                    //     coarse_y, fine_y
+                    // );
 
-                let pattern1 = pattern_table[pattern_address as usize];
-                let pattern2 = pattern_table[pattern_address as usize + 8];
+                    let pattern_address = tile_value as u16 * 0x10 + fine_y;
 
-                let shift = 7 - self.x;
+                    let pattern_table = match self.current_background_pattern_table() {
+                        PatternTableSelection::Left => self.left_pattern_table(),
+                        PatternTableSelection::Right => self.right_pattern_table(),
+                    };
 
-                let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
+                    let pattern1 = pattern_table[pattern_address as usize];
+                    let pattern2 = pattern_table[pattern_address as usize + 8];
 
-                // dbg!(bit);
+                    let shift = 7 - self.x;
 
-                let color: u8 = if bit == 0 {
-                    0xff
-                } else {
-                    palette_value[bit as usize - 1]
-                };
+                    let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
 
-                self.frame_buffer[target_y][target_x] = color;
+                    // dbg!(bit);
 
-                // move x
-                if self.x == 7 {
-                    self.x = 0;
-
-                    if (self.v & 0x001F) == 31 {
-                        self.v &= !0x001f;
-                        self.v ^= 0x400;
+                    let color: u8 = if bit == 0 {
+                        0xff
                     } else {
-                        self.v += 1;
+                        palette_value[bit as usize - 1]
+                    };
+
+                    self.frame_buffer[self.current_scanline as usize][target_x] = color;
+
+                    // move x
+                    if self.x == 7 {
+                        self.x = 0;
+
+                        if (self.v & 0x001F) == 31 {
+                            self.v &= !0x001f;
+                            self.v ^= 0x400;
+                        } else {
+                            self.v += 1;
+                        }
+                    } else {
+                        self.x += 1;
                     }
-                } else {
-                    self.x += 1;
-                }
-            }
-
-            self.x = start_fine_x;
-
-            self.v &= !0b10000011111;
-            self.v |= self.t & 0b10000011111;
-
-            // dbg!(hex_string(self.v), binary_string(self.v));
-
-            if self.v & 0x7000 != 0x7000 {
-                self.v += 0x1000;
-            } else {
-                self.v &= !0x7000;
-                let mut y = (self.v & 0x03E0) >> 5;
-
-                if y == 29 {
-                    y = 0;
-                    self.v ^= 0x0800;
-                } else if y == 31 {
-                    y = 0;
-                } else {
-                    y += 1;
                 }
 
-                self.v = (self.v & !0x03E0) | (y << 5);
+                self.x = start_fine_x;
+
+                self.v &= !0b10000011111;
+                self.v |= self.t & 0b10000011111;
+
+                // dbg!(hex_string(self.v), binary_string(self.v));
+
+                if self.v & 0x7000 != 0x7000 {
+                    self.v += 0x1000;
+                } else {
+                    self.v &= !0x7000;
+                    let mut y = (self.v & 0x03E0) >> 5;
+
+                    if y == 29 {
+                        y = 0;
+                        self.v ^= 0x0800;
+                    } else if y == 31 {
+                        y = 0;
+                    } else {
+                        y += 1;
+                    }
+
+                    self.v = (self.v & !0x03E0) | (y << 5);
+                }
             }
+            240 => {}
+            241 => self.status.insert(PpuStatus::IN_VBLANK),
+            242..=260 => {}
+            _ => panic!("Unhandled scanline: {}", self.current_scanline),
         }
 
-        // dbg!(binary_string(self.v), binary_string(self.t));
+        self.current_scanline = (self.current_scanline + 1) % 262;
     }
 
     pub fn get_frame_buffer(&self) -> &[[u8; 256]; 240] {
