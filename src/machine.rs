@@ -50,7 +50,7 @@ impl Machine {
             }
 
             if self.cpu.bus.ppu.get_current_scanline() == 242 {
-                self.cpu.enter_nmi_if_needed();
+                self.cpu.enter_nmi();
             }
 
             return None;

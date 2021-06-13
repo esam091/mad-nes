@@ -64,16 +64,14 @@ impl Cpu {
         }
     }
 
-    pub fn enter_nmi_if_needed(&mut self) {
-        if self.bus.read_address(0x2000) & 0x80 != 0 {
-            println!("Enter vblank");
+    pub fn enter_nmi(&mut self) {
+        println!("Enter vblank");
 
-            let addresses = self.pc.to_le_bytes();
-            self.push(addresses[1]);
-            self.push(addresses[0]);
-            self.push(self.p.bitand(!(1 << 5)));
-            self.pc = self.nmi_vector;
-        }
+        let addresses = self.pc.to_le_bytes();
+        self.push(addresses[1]);
+        self.push(addresses[0]);
+        self.push(self.p.bitand(!(1 << 5)));
+        self.pc = self.nmi_vector;
     }
 
     pub fn step(&mut self) -> CpuResult {
