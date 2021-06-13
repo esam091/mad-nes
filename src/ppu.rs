@@ -314,16 +314,6 @@ impl Ppu {
         }
     }
 
-    pub fn fill_buffer(&mut self) {
-        if self.mask & 0b1000 == 0 {
-            return;
-        }
-
-        for _ in 0..262 {
-            self.advance_scanline();
-        }
-    }
-
     pub fn get_current_scanline(&self) -> u32 {
         self.current_scanline
     }
