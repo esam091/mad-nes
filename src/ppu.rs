@@ -104,7 +104,13 @@ impl Ppu {
         }
     }
 
-    pub fn get_status(&self) -> PpuStatus {
+    pub fn get_status(&mut self) -> PpuStatus {
+        if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
+            if self.current_scanline == 169 {
+                self.status.insert(PpuStatus::SPRITE_0_HIT);
+            }
+        }
+
         self.status
     }
 
@@ -318,6 +324,7 @@ impl Ppu {
         match self.current_scanline {
             261 => {
                 self.status.insert(PpuStatus::IN_VBLANK);
+                self.status.remove(PpuStatus::SPRITE_0_HIT);
 
                 if self.mask & 0b1000 == 0 {
                     self.current_scanline = (self.current_scanline + 1) % 262;
