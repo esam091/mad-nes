@@ -1812,16 +1812,24 @@ impl Iterator for Cpu {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+
     use super::*;
-    use crate::ines::InesRom;
+    use crate::{bus::JoypadState, ines::InesRom, ppu::Ppu};
 
     #[test]
     fn nestest() {
         let text = std::fs::read_to_string("nestest.log").unwrap();
         let lines = text.lines();
 
+        let bus = RealBus {
+            memory: [0; 0x10000],
+            active_buttons: HashSet::new(),
+            joypad_state: JoypadState::Idle,
+            ppu: Ppu::new([0; 0x4000]),
+        };
         let mut cycles = 7;
-        let mut cpu = Cpu::load(&InesRom::load("nestest.nes").ok().unwrap());
+        let mut cpu = Cpu::load(&InesRom::load("nestest.nes").ok().unwrap(), bus);
 
         // starting point according to the nestest guide
         cpu.pc = 0xc000;
