@@ -101,12 +101,16 @@ impl BusTrait for RealBus {
 
                 // TODO: advance cycles
             }
-            0x4016 => match (self.joypad_state, value) {
+            0x4016 => match (self.joypad_state, value & 1) {
+                // On nestest, the value is 9 and 8 instead of 1 and 0, we take
                 (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
                 (JoypadState::Polling, 0) => {
                     self.joypad_state = JoypadState::Ready(JoypadButton::A)
                 }
-                _ => {}
+                _ => println!(
+                    "Unknown joypad combination: {:?}, {}",
+                    self.joypad_state, value
+                ),
             },
             _ => self.memory[address as usize] = value,
         }
