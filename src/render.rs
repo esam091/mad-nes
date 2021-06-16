@@ -417,9 +417,6 @@ impl<'a> Renderer<'a> {
             self.texture_creator,
         );
 
-        let duration = std::time::SystemTime::now()
-            .duration_since(start_time)
-            .unwrap();
         // // println!("Tile generation duration: {:?}", duration);
 
         // // let pattern_texture =
