@@ -40,7 +40,7 @@ impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
         match address {
             0x2002 => {
-                log_ppu!("Read $2002: {}", self.memory[address as usize]);
+                log_ppu!("Read $2002: {:#010b}", self.ppu.get_status().bits());
                 self.ppu.clear_address_latch();
                 return self.ppu.get_status().bits();
             }
@@ -103,10 +103,8 @@ impl BusTrait for RealBus {
             }
             0x4016 => match (self.joypad_state, value & 1) {
                 // On nestest, the value is 9 and 8 instead of 1 and 0, we take
-                (JoypadState::Idle, 1) => self.joypad_state = JoypadState::Polling,
-                (JoypadState::Polling, 0) => {
-                    self.joypad_state = JoypadState::Ready(JoypadButton::A)
-                }
+                (_, 1) => self.joypad_state = JoypadState::Polling,
+                (_, 0) => self.joypad_state = JoypadState::Ready(JoypadButton::A),
                 _ => println!(
                     "Unknown joypad combination: {:?}, {}",
                     self.joypad_state, value
