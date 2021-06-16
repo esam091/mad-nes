@@ -51,7 +51,7 @@ impl Machine {
             }
 
             if self.cpu.bus.ppu.get_current_scanline() == 242
-                && self.cpu.bus.ppu.is_rendering_enabled()
+                && self.cpu.bus.ppu.generates_nmi_at_vblank()
             {
                 log_ppu!("Enter vblank");
                 self.cpu.enter_nmi();

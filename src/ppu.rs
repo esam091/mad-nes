@@ -45,6 +45,44 @@ pub struct SpriteData {
 }
 
 bitflags! {
+    pub struct PpuControl: u8 {
+        const GENERATE_NMI_AT_VBLANK = 0b10000000;
+        const SPRITE_8X16_MODE = 0b00100000;
+        const BACKGROUND_PATTERN_TABLE_FLAG = 0b00010000;
+        const SPRITE_PATTERN_TABLE_FLAG = 0b00001000;
+        const ADDRESS_INCREMENT_FLAG = 0b00000100;
+        const NAMETABLE_VERTICAL_FLAG = 0b00000010;
+        const NAMETABLE_HORIZONTAL_FLAG = 0b00000001;
+    }
+}
+
+impl PpuControl {
+    pub fn address_increment(&self) -> u16 {
+        if self.contains(PpuControl::ADDRESS_INCREMENT_FLAG) {
+            32
+        } else {
+            1
+        }
+    }
+
+    pub fn background_pattern_table(&self) -> PatternTableSelection {
+        if self.contains(PpuControl::BACKGROUND_PATTERN_TABLE_FLAG) {
+            PatternTableSelection::Right
+        } else {
+            PatternTableSelection::Left
+        }
+    }
+
+    pub fn sprite_pattern_table(&self) -> PatternTableSelection {
+        if self.contains(PpuControl::SPRITE_PATTERN_TABLE_FLAG) {
+            PatternTableSelection::Right
+        } else {
+            PatternTableSelection::Left
+        }
+    }
+}
+
+bitflags! {
     pub struct PpuStatus: u8 {
         const IN_VBLANK = 0b10000000;
         const SPRITE_0_HIT = 0b01000000;
@@ -64,7 +102,7 @@ pub struct Ppu {
 
     current_oam_address: u8,
     oam_data: [u8; 256],
-    control_flag: u8,
+    control: PpuControl,
     mask: u8,
 
     read_buffer: u8,
@@ -91,7 +129,7 @@ impl Ppu {
             write_latch: WriteLatch::Zero,
             current_oam_address: 0,
             oam_data: [0; 256],
-            control_flag: 0,
+            control: PpuControl::empty(),
 
             x: 0,
             t: 0,
@@ -112,12 +150,11 @@ impl Ppu {
         self.status
     }
 
-    pub fn set_control_flag(&mut self, value: u8) {
-        log_ppu!("Write $2000: {:#08b}", value);
-        self.control_flag = value;
-        // dbg!(self.control_flag);
+    pub fn set_control(&mut self, value: PpuControl) {
+        log_ppu!("Write $2000: {:#010b}", value);
+        self.control = value;
         self.t &= !0xc00;
-        self.t |= (value as u16 & 0b11) << 10;
+        self.t |= (value.bits() as u16 & 0b11) << 10;
     }
 
     pub fn set_mask(&mut self, value: u8) {
@@ -136,6 +173,7 @@ impl Ppu {
     }
 
     pub fn write_oam_data(&mut self, data: u8) {
+        log_ppu!("Write $2004: {:#04X}", data);
         self.oam_data[self.current_oam_address as usize] = data;
         self.current_oam_address += 1;
     }
@@ -147,11 +185,7 @@ impl Ppu {
 
         self.read_buffer = self.memory[self.v as usize];
 
-        if self.control_flag & 0b00000100 != 0 {
-            self.v = self.v.wrapping_add(32);
-        } else {
-            self.v = self.v.wrapping_add(1);
-        }
+        self.v = self.v.wrapping_add(self.control.address_increment());
 
         last_buffer
     }
@@ -161,11 +195,7 @@ impl Ppu {
 
         self.memory[self.v as usize] = data;
 
-        if self.control_flag & 0b00000100 != 0 {
-            self.v = self.v.wrapping_add(32);
-        } else {
-            self.v = self.v.wrapping_add(1);
-        }
+        self.v = self.v.wrapping_add(self.control.address_increment());
     }
 
     pub fn write_scroll(&mut self, position: u8) {
@@ -193,14 +223,6 @@ impl Ppu {
         &self.oam_data.copy_from_slice(data);
     }
 
-    pub fn current_nametable_address(&self) -> usize {
-        0x2000 + (self.control_flag as usize & 0b11) * 0x400
-    }
-
-    pub fn current_attribute_table_address(&self) -> usize {
-        0x23c0 + (self.control_flag as usize & 0b11) * 0x400
-    }
-
     pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
         (0usize..=255)
             .step_by(4)
@@ -209,11 +231,7 @@ impl Ppu {
                 let x = self.oam_data[index + 3];
 
                 let byte1 = self.oam_data[index + 1];
-                let tile_pattern = if self.control_flag & 8 != 0 {
-                    PatternTableSelection::Right
-                } else {
-                    PatternTableSelection::Left
-                };
+                let tile_pattern = self.control.sprite_pattern_table();
 
                 let tile_number = byte1;
 
@@ -244,7 +262,7 @@ impl Ppu {
     }
 
     pub fn write_address(&mut self, address: u8) {
-        log_ppu!("Write $2006: {:#02X?}", address);
+        log_ppu!("Write $2006: {:#04X?}", address);
         match self.write_latch {
             WriteLatch::Zero => {
                 let value = address & 0b00111111;
@@ -275,11 +293,7 @@ impl Ppu {
     }
 
     pub fn current_background_pattern_table(&self) -> PatternTableSelection {
-        if self.control_flag & 16 == 0 {
-            PatternTableSelection::Left
-        } else {
-            PatternTableSelection::Right
-        }
+        self.control.background_pattern_table()
     }
 
     pub fn get_color_palette(&self) -> ColorPalette {
@@ -342,7 +356,7 @@ impl Ppu {
                 self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
-                if self.mask & 0b1000 == 0 {
+                if self.mask & 0b1100 == 0 {
                     self.current_scanline = (self.current_scanline + 1) % 262;
 
                     return;
@@ -351,7 +365,7 @@ impl Ppu {
                 self.v |= self.t & 0b111101111100000;
             }
             0..=239 => {
-                if self.mask & 0b1000 == 0 {
+                if self.mask & 0b1100 == 0 {
                     self.current_scanline = (self.current_scanline + 1) % 262;
 
                     return;
@@ -481,11 +495,12 @@ impl Ppu {
 
             let sprite_fine_y = self.current_scanline - sprite_y;
 
-            let pattern_table = if self.control_flag & 8 != 0 {
-                self.right_pattern_table()
-            } else {
-                self.left_pattern_table()
-            };
+            let pattern_table =
+                if self.control.background_pattern_table() == PatternTableSelection::Right {
+                    self.right_pattern_table()
+                } else {
+                    self.left_pattern_table()
+                };
 
             let tile = self.oam_data[1];
             let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
@@ -508,7 +523,7 @@ impl Ppu {
         &self.frame_buffer
     }
 
-    pub fn is_rendering_enabled(&self) -> bool {
-        self.control_flag & 0x80 != 0
+    pub fn generates_nmi_at_vblank(&self) -> bool {
+        self.control.contains(PpuControl::GENERATE_NMI_AT_VBLANK)
     }
 }
