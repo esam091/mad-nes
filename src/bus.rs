@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     log_ppu,
-    ppu::{Ppu, PpuControl},
+    ppu::{Ppu, PpuControl, PpuMask},
 };
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -94,7 +94,7 @@ impl BusTrait for RealBus {
                 self.memory[address as usize] = value;
             }
             0x2001 => {
-                self.ppu.set_mask(value);
+                self.ppu.set_mask(PpuMask::from_bits(value).unwrap());
             }
             0x2005 => self.ppu.write_scroll(value),
             0x2006 => self.ppu.write_address(value),

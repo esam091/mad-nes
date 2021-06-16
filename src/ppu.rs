@@ -56,6 +56,21 @@ bitflags! {
     }
 }
 
+bitflags! {
+    pub struct PpuMask: u8 {
+        const SHOW_SPRITES = 0b00010000;
+        const SHOW_BACKGROUND = 0b00001000;
+        const SHOW_LEFTMOST_SPRITES = 0b00000100;
+        const SHOW_LEFTMOST_BACKGROUND = 0b00000010;
+    }
+}
+
+impl PpuMask {
+    fn is_rendering_enabled(&self) -> bool {
+        self.contains(PpuMask::SHOW_SPRITES | PpuMask::SHOW_BACKGROUND)
+    }
+}
+
 impl PpuControl {
     pub fn address_increment(&self) -> u16 {
         if self.contains(PpuControl::ADDRESS_INCREMENT_FLAG) {
@@ -103,7 +118,7 @@ pub struct Ppu {
     current_oam_address: u8,
     oam_data: [u8; 256],
     control: PpuControl,
-    mask: u8,
+    mask: PpuMask,
 
     read_buffer: u8,
 
@@ -138,7 +153,7 @@ impl Ppu {
             read_buffer: 0,
 
             frame_buffer: [[0; 256]; 240],
-            mask: 0,
+            mask: PpuMask::empty(),
 
             status: PpuStatus::empty(),
 
@@ -157,7 +172,7 @@ impl Ppu {
         self.t |= (value.bits() as u16 & 0b11) << 10;
     }
 
-    pub fn set_mask(&mut self, value: u8) {
+    pub fn set_mask(&mut self, value: PpuMask) {
         log_ppu!("Write $2001: {:#08b}", value);
         self.mask = value;
         // dbg!(self.mask);
@@ -356,7 +371,7 @@ impl Ppu {
                 self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
-                if self.mask & 0b1100 == 0 {
+                if !self.mask.is_rendering_enabled() {
                     self.current_scanline = (self.current_scanline + 1) % 262;
 
                     return;
@@ -365,7 +380,7 @@ impl Ppu {
                 self.v |= self.t & 0b111101111100000;
             }
             0..=239 => {
-                if self.mask & 0b1100 == 0 {
+                if !self.mask.is_rendering_enabled() {
                     self.current_scanline = (self.current_scanline + 1) % 262;
 
                     return;
