@@ -443,7 +443,10 @@ impl<'a> Renderer<'a> {
                 canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
                 canvas.clear();
 
-                for sprite_data in ppu.get_oam_sprite_data() {
+                let mut sprites = ppu.get_oam_sprite_data();
+                sprites.reverse();
+
+                for sprite_data in sprites {
                     if sprite_data.draw_priority == DrawPriority::Foreground {
                         continue;
                     }
@@ -471,7 +474,10 @@ impl<'a> Renderer<'a> {
                 canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
                 canvas.clear();
 
-                for sprite_data in ppu.get_oam_sprite_data() {
+                let mut sprites = ppu.get_oam_sprite_data();
+                sprites.reverse();
+
+                for sprite_data in sprites {
                     if sprite_data.draw_priority == DrawPriority::Background {
                         continue;
                     }
