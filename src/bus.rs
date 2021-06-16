@@ -44,6 +44,10 @@ impl BusTrait for RealBus {
                 self.ppu.clear_address_latch();
                 return self.ppu.get_status().bits();
             }
+            0x2004 => {
+                log_ppu!("Read $2004");
+                self.memory[address as usize]
+            }
             0x2007 => self.ppu.read_data(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {
