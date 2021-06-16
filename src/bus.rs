@@ -95,6 +95,7 @@ impl BusTrait for RealBus {
             0x2003 => self.ppu.set_oam_address(value),
             0x2004 => self.ppu.write_oam_data(value),
             0x4014 => {
+                log_ppu!("Write $4014: {:#04X}", value);
                 let starting_address = value as usize * 0x100;
                 let slice = &self.memory[starting_address..=starting_address + 0xff];
                 self.ppu.copy_oam_data(slice);

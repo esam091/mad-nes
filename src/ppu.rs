@@ -131,6 +131,7 @@ impl Ppu {
     }
 
     pub fn set_oam_address(&mut self, address: u8) {
+        log_ppu!("Write $2003: {:#04X}", address);
         self.current_oam_address = address;
     }
 
@@ -142,7 +143,7 @@ impl Ppu {
     pub fn read_data(&mut self) -> u8 {
         // todo: palette read should not be buffered
         let last_buffer = self.read_buffer;
-        log_ppu!("Read $2007: {:#02X?}", last_buffer);
+        log_ppu!("Read $2007 at {:#06X}: {:#04X?}", self.v, last_buffer);
 
         self.read_buffer = self.memory[self.v as usize];
 
