@@ -387,7 +387,7 @@ impl Ppu {
                 }
 
                 let palette = self.get_color_palette();
-                let start_fine_x = self.x;
+                let mut fine_x = self.x;
                 let fine_y = (self.v & 0x7000) >> 12;
                 for target_x in 0..256 {
                     // render
@@ -432,7 +432,7 @@ impl Ppu {
                     let pattern1 = pattern_table[pattern_address as usize];
                     let pattern2 = pattern_table[pattern_address as usize + 8];
 
-                    let shift = 7 - self.x;
+                    let shift = 7 - fine_x;
 
                     let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
 
@@ -447,8 +447,8 @@ impl Ppu {
                     self.frame_buffer[self.current_scanline as usize][target_x] = color;
 
                     // move x
-                    if self.x == 7 {
-                        self.x = 0;
+                    if fine_x == 7 {
+                        fine_x = 0;
 
                         if (self.v & 0x001F) == 31 {
                             self.v &= !0x001f;
@@ -457,11 +457,9 @@ impl Ppu {
                             self.v += 1;
                         }
                     } else {
-                        self.x += 1;
+                        fine_x += 1;
                     }
                 }
-
-                self.x = start_fine_x;
 
                 self.v &= !0b10000011111;
                 self.v |= self.t & 0b10000011111;
