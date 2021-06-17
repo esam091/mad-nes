@@ -16,7 +16,7 @@ use crate::ppu::{DrawPriority, PatternTableSelection, Ppu};
 
 const COLOR_KEY: Color = Color::RGBA(3, 3, 3, 3);
 
-const PALETTE: [(u8, u8, u8, u8); 64] = [
+pub const PALETTE: [(u8, u8, u8, u8); 64] = [
     (0x80, 0x80, 0x80, 0xff),
     (0x00, 0x3D, 0xA6, 0xff),
     (0x00, 0x12, 0xB0, 0xff),
@@ -158,13 +158,13 @@ fn create_texture<'r>(
 
     pattern_texture
 }
-struct PatternBank<'r> {
+pub struct PatternBank<'r> {
     textures: Vec<Texture<'r>>,
     sprite_textures: Vec<Texture<'r>>,
 }
 
 impl<'r> PatternBank<'r> {
-    fn new(
+    pub fn new(
         pattern_table: &[u8],
         background_color_sets: &Vec<Palette>,
         sprite_color_sets: &Vec<Palette>,
@@ -217,7 +217,7 @@ impl<'r> PatternBank<'r> {
         }
     }
 
-    fn render_tile(
+    pub fn render_tile(
         &self,
         canvas: &mut WindowCanvas,
         nametable_value: u8,
@@ -306,7 +306,7 @@ impl<'r> PatternBank<'r> {
     }
 }
 
-fn create_sdl_palette(color_palette: &[[u8; 3]]) -> Vec<Palette> {
+pub fn create_sdl_palette(color_palette: &[[u8; 3]]) -> Vec<Palette> {
     let palettes: Vec<Palette> = (0..4)
         .map(|set_index| {
             let color_set = color_palette;
@@ -317,8 +317,8 @@ fn create_sdl_palette(color_palette: &[[u8; 3]]) -> Vec<Palette> {
 
             for color_index in 0..3 {
                 let palette_index = set[color_index as usize];
-                let (r, g, b, _) = PALETTE[palette_index as usize];
-                colors.push(Color::RGB(r, g, b));
+                let (r, g, b, a) = PALETTE[palette_index as usize];
+                colors.push(Color::RGBA(r, g, b, a));
             }
 
             Palette::with_colors(&colors).unwrap()

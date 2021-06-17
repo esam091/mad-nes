@@ -1,3 +1,5 @@
+use std::{convert::TryInto, ops::BitAnd};
+
 use sdl2::{
     pixels::Color,
     rect::Rect,
@@ -5,7 +7,10 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::Ppu;
+use crate::{
+    ppu::{PatternTableSelection, Ppu},
+    render::{create_sdl_palette, PatternBank, PALETTE},
+};
 
 fn create_screen_texture(texture_creator: &TextureCreator<WindowContext>) -> Texture<'_> {
     texture_creator
@@ -29,6 +34,85 @@ impl<'a> PpuDebugger<'a> {
 
         canvas.set_draw_color(Color::WHITE);
         canvas.clear();
+
+        let video_buffer = ppu.get_buffer();
+
+        let raw_palette = ppu.get_color_palette();
+        let background_color_sets = create_sdl_palette(&raw_palette.background_color_set);
+        let sprite_color_sets = create_sdl_palette(&raw_palette.sprite_color_set);
+
+        let left_pattern_bank = PatternBank::new(
+            ppu.left_pattern_table(),
+            &background_color_sets,
+            &sprite_color_sets,
+            self.texture_creator,
+        );
+
+        let right_pattern_bank = PatternBank::new(
+            ppu.right_pattern_table(),
+            &background_color_sets,
+            &sprite_color_sets,
+            self.texture_creator,
+        );
+
+        let current_pattern_bank = match ppu.current_background_pattern_table() {
+            PatternTableSelection::Left => &left_pattern_bank,
+            PatternTableSelection::Right => &right_pattern_bank,
+        };
+
+        canvas
+            .with_texture_canvas(&mut self.top_left_nametable, |canvas| {
+                let (r, g, b, _) = PALETTE[raw_palette.background as usize];
+
+                canvas.set_draw_color(Color::RGB(r, g, b));
+                canvas.clear();
+
+                let current_nametable = 0x2000;
+                let current_attribute_table = current_nametable + 0x3c0;
+
+                for row in 0..30 {
+                    for col in 0..32 {
+                        let nametable_address = row * 32 + col + current_nametable;
+
+                        let nametable_value = video_buffer[nametable_address];
+
+                        let attribute_y = row / 4;
+                        let attribute_x = col / 4;
+
+                        let attribute_value =
+                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
+
+                        let top_left = attribute_value & 0b11;
+                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
+                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
+                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
+
+                        let subtile_y = row % 4;
+                        let subtile_x = col % 4;
+
+                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
+                            (0, 0) => top_left,
+                            (1, 0) => top_right,
+                            (0, 1) => bottom_left,
+                            (1, 1) => bottom_right,
+                            _ => panic!("Impossible subtile location!"),
+                        };
+
+                        let xx: i32 = col.try_into().unwrap();
+                        let yy: i32 = row.try_into().unwrap();
+
+                        current_pattern_bank.render_tile(
+                            canvas,
+                            nametable_value,
+                            palette_set_index,
+                            Rect::new(xx * 8, yy * 8, 8, 8),
+                        );
+                    }
+                }
+
+                // canvas.copy(debug_texture, None, None).unwrap();
+            })
+            .unwrap();
 
         canvas
             .copy(&self.top_left_nametable, None, game_size_rect(0, 0))
