@@ -67,7 +67,7 @@ bitflags! {
 
 impl PpuMask {
     fn is_rendering_enabled(&self) -> bool {
-        self.contains(PpuMask::SHOW_SPRITES | PpuMask::SHOW_BACKGROUND)
+        self.contains(PpuMask::SHOW_SPRITES) || self.contains(PpuMask::SHOW_BACKGROUND)
     }
 }
 
