@@ -11,12 +11,14 @@ mod ines;
 mod instruction;
 mod machine;
 mod ppu;
+mod ppu_debugger;
 mod render;
 mod utils;
 
 use bus::{JoypadButton, MemoryBuffer};
 use machine::Machine;
 use ppu::VideoMemoryBuffer;
+use ppu_debugger::PpuDebugger;
 use render::Renderer;
 
 use sdl2::keyboard::{Keycode, Scancode};
@@ -125,6 +127,16 @@ fn main() -> Result<(), String> {
         .build()
         .unwrap();
 
+    let debugger_canvas = video_subsystem
+        .window("Ppu Debugger", 1024, 775)
+        .build()
+        .unwrap()
+        .into_canvas()
+        .accelerated()
+        .target_texture()
+        .build()
+        .unwrap();
+
     let mut event_pump = sdl_context.event_pump().unwrap();
     let canvas = window
         .into_canvas()
@@ -136,6 +148,9 @@ fn main() -> Result<(), String> {
     let texture_creator = canvas.texture_creator();
 
     let mut renderer = Renderer::new(canvas, &texture_creator);
+
+    let debug_texture = debugger_canvas.texture_creator();
+    let mut debug_renderer = PpuDebugger::new(debugger_canvas, &debug_texture);
     // let stdout = io::stdout()
     //     .into_raw_mode()
     //     .map_err(|_| "Failed retrieving stdout")?;
@@ -215,6 +230,7 @@ fn main() -> Result<(), String> {
 
             let frame_start = SystemTime::now();
             renderer.render(&machine.get_ppu());
+            debug_renderer.render(&machine.get_ppu());
             let frame_duration = SystemTime::now().duration_since(frame_start).unwrap();
             dbg!(frame_duration);
 
