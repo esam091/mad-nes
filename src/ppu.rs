@@ -160,6 +160,13 @@ pub enum SpriteDrawingMode {
     Draw8x16,
 }
 
+fn map_mirror(address: u16) -> u16 {
+    match address {
+        0x3f20..=0x3fff => (address - 0x3f00) % 0x20 + 0x3f00,
+        _ => address,
+    }
+}
+
 impl Ppu {
     pub fn new(memory: VideoMemoryBuffer, mirroring: Mirroring) -> Ppu {
         Ppu {
@@ -218,28 +225,42 @@ impl Ppu {
     }
 
     pub fn read_data(&mut self) -> u8 {
-        // todo: palette read should not be buffered
         let last_buffer = self.read_buffer;
         log_ppu!("Read $2007 at {:#06X}: {:#04X?}", self.v, last_buffer);
 
-        self.read_buffer = self.memory[self.v as usize];
+        let real_address = map_mirror(self.v);
+        self.read_buffer = self.memory[real_address as usize];
 
         self.v = self.v.wrapping_add(self.control.address_increment());
 
-        last_buffer
+        if real_address >= 0x3f00 {
+            self.read_buffer
+        } else {
+            last_buffer
+        }
     }
 
     pub fn write_data(&mut self, data: u8) {
         log_ppu!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
 
-        self.memory[self.v as usize] = data;
+        let real_address = map_mirror(self.v);
 
-        let xor = match self.mirroring {
-            Mirroring::Horizontal => 0x400,
-            Mirroring::Vertical => 0x800,
-        };
+        self.memory[real_address as usize] = data;
 
-        self.memory[self.v as usize ^ xor] = data;
+        if real_address == 0x3f00 {
+            self.memory[0x3f10] = data;
+        } else if real_address == 0x3f10 {
+            self.memory[0x3f00] = data;
+        }
+
+        if real_address < 0x3f00 {
+            let xor = match self.mirroring {
+                Mirroring::Horizontal => 0x400,
+                Mirroring::Vertical => 0x800,
+            };
+
+            self.memory[real_address as usize ^ xor] = data;
+        }
 
         self.v = self.v.wrapping_add(self.control.address_increment());
     }
