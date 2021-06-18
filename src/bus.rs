@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::TryInto};
 
 use crate::{
     log_ppu,
@@ -59,8 +59,9 @@ impl BusTrait for RealBus {
                 return self.ppu.get_status().bits();
             }
             0x2004 => {
-                log_ppu!("Read $2004");
-                self.memory[address as usize]
+                let data = self.ppu.read_oam_data();
+                log_ppu!("Read $2004: {:#04X}", data);
+                data
             }
             0x2007 => self.ppu.read_data(),
             0x4016 => {
