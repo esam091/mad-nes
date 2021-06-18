@@ -12,7 +12,7 @@ use sdl2::{
     video::WindowContext,
 };
 
-use crate::ppu::{DrawPriority, PatternTableSelection, Ppu};
+use crate::ppu::{DrawPriority, PatternTableSelection, Ppu, SpriteDrawingMode};
 
 const COLOR_KEY: Color = Color::RGBA(3, 3, 3, 3);
 
@@ -570,14 +570,33 @@ impl<'a> Renderer<'a> {
                 PatternTableSelection::Right => &right_pattern_bank,
             };
 
+            let (y1, y2) = if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x16
+                && sprite_data.flip_vertical
+            {
+                (sprite_data.y + 8, sprite_data.y)
+            } else {
+                (sprite_data.y, sprite_data.y + 8)
+            };
+
             pattern_bank.render_sprite_ex(
                 canvas,
                 sprite_data.tile_number,
                 sprite_data.color_palette,
-                Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
+                Rect::new(sprite_data.x as i32, y1 as i32, 8, 8),
                 sprite_data.flip_horizontal,
                 sprite_data.flip_vertical,
-            )
+            );
+
+            if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x16 {
+                pattern_bank.render_sprite_ex(
+                    canvas,
+                    sprite_data.tile_number + 1,
+                    sprite_data.color_palette,
+                    Rect::new(sprite_data.x as i32, y2 as i32, 8, 8),
+                    sprite_data.flip_horizontal,
+                    sprite_data.flip_vertical,
+                );
+            }
         }
     }
 }

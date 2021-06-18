@@ -42,6 +42,7 @@ pub struct SpriteData {
     pub draw_priority: DrawPriority,
     pub flip_horizontal: bool,
     pub flip_vertical: bool,
+    pub drawing_mode: SpriteDrawingMode,
 }
 
 bitflags! {
@@ -56,23 +57,15 @@ bitflags! {
     }
 }
 
-bitflags! {
-    pub struct PpuMask: u8 {
-        const GREYSCALE = 0b00000001;
-        const SHOW_SPRITES = 0b00010000;
-        const SHOW_BACKGROUND = 0b00001000;
-        const SHOW_LEFTMOST_SPRITES = 0b00000100;
-        const SHOW_LEFTMOST_BACKGROUND = 0b00000010;
-    }
-}
-
-impl PpuMask {
-    fn is_rendering_enabled(&self) -> bool {
-        self.contains(PpuMask::SHOW_SPRITES) || self.contains(PpuMask::SHOW_BACKGROUND)
-    }
-}
-
 impl PpuControl {
+    pub fn drawing_mode(&self) -> SpriteDrawingMode {
+        if self.contains(PpuControl::SPRITE_8X16_MODE) {
+            SpriteDrawingMode::Draw8x16
+        } else {
+            SpriteDrawingMode::Draw8x8
+        }
+    }
+
     pub fn address_increment(&self) -> u16 {
         if self.contains(PpuControl::ADDRESS_INCREMENT_FLAG) {
             32
@@ -95,6 +88,22 @@ impl PpuControl {
         } else {
             PatternTableSelection::Left
         }
+    }
+}
+
+bitflags! {
+    pub struct PpuMask: u8 {
+        const GREYSCALE = 0b00000001;
+        const SHOW_SPRITES = 0b00010000;
+        const SHOW_BACKGROUND = 0b00001000;
+        const SHOW_LEFTMOST_SPRITES = 0b00000100;
+        const SHOW_LEFTMOST_BACKGROUND = 0b00000010;
+    }
+}
+
+impl PpuMask {
+    fn is_rendering_enabled(&self) -> bool {
+        self.contains(PpuMask::SHOW_SPRITES) || self.contains(PpuMask::SHOW_BACKGROUND)
     }
 }
 
@@ -143,6 +152,12 @@ pub struct ColorPalette {
     pub background: u8,
     pub background_color_set: [[u8; 3]; 4],
     pub sprite_color_set: [[u8; 3]; 4],
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SpriteDrawingMode {
+    Draw8x8,
+    Draw8x16,
 }
 
 impl Ppu {
@@ -255,6 +270,8 @@ impl Ppu {
     }
 
     pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
+        let drawing_mode = self.control.drawing_mode();
+
         (0usize..=255)
             .step_by(4)
             .map(|index| {
@@ -262,9 +279,21 @@ impl Ppu {
                 let x = self.oam_data[index + 3];
 
                 let byte1 = self.oam_data[index + 1];
-                let tile_pattern = self.control.sprite_pattern_table();
+                let tile_pattern = if drawing_mode == SpriteDrawingMode::Draw8x8 {
+                    self.control.sprite_pattern_table()
+                } else {
+                    if byte1 & 1 == 0 {
+                        PatternTableSelection::Left
+                    } else {
+                        PatternTableSelection::Right
+                    }
+                };
 
-                let tile_number = byte1;
+                let tile_number = if drawing_mode == SpriteDrawingMode::Draw8x8 {
+                    byte1
+                } else {
+                    byte1 & !1
+                };
 
                 let byte2 = self.oam_data[index + 2];
                 let color_palette = byte2 & 0b00000011;
@@ -287,6 +316,7 @@ impl Ppu {
                     draw_priority,
                     flip_horizontal,
                     flip_vertical,
+                    drawing_mode,
                 }
             })
             .collect::<Vec<_>>()
