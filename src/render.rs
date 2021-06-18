@@ -507,21 +507,23 @@ impl<'a> Renderer<'a> {
 
         let gameplay_texture = &mut self.gameplay_texture;
 
-        for y in 0..240 {
-            for x in 0..256 {
-                // dbg!(&index, &frame[index]);
-                let (r, g, b, a) = if frame[y][x] != 0xff {
-                    PALETTE[frame[y][x] as usize]
-                } else {
-                    (0, 0, 0, 0)
-                };
+        if ppu.is_background_rendering_enabled() {
+            for y in 0..240 {
+                for x in 0..256 {
+                    // dbg!(&index, &frame[index]);
+                    let (r, g, b, a) = if frame[y][x] != 0xff {
+                        PALETTE[frame[y][x] as usize]
+                    } else {
+                        (0, 0, 0, 0)
+                    };
 
-                let start_index = (y * 256 + x) * 4;
+                    let start_index = (y * 256 + x) * 4;
 
-                background_tile_pixels[start_index] = b;
-                background_tile_pixels[start_index + 1] = g;
-                background_tile_pixels[start_index + 2] = r;
-                background_tile_pixels[start_index + 3] = a;
+                    background_tile_pixels[start_index] = b;
+                    background_tile_pixels[start_index + 1] = g;
+                    background_tile_pixels[start_index + 2] = r;
+                    background_tile_pixels[start_index + 3] = a;
+                }
             }
         }
 

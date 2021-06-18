@@ -555,4 +555,8 @@ impl Ppu {
     pub fn generates_nmi_at_vblank(&self) -> bool {
         self.control.contains(PpuControl::GENERATE_NMI_AT_VBLANK)
     }
+
+    pub fn is_background_rendering_enabled(&self) -> bool {
+        self.mask.contains(PpuMask::SHOW_BACKGROUND)
+    }
 }
