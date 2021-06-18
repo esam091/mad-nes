@@ -559,4 +559,8 @@ impl Ppu {
     pub fn is_background_rendering_enabled(&self) -> bool {
         self.mask.contains(PpuMask::SHOW_BACKGROUND)
     }
+
+    pub fn is_sprite_rendering_enabled(&self) -> bool {
+        self.mask.contains(PpuMask::SHOW_SPRITES)
+    }
 }

@@ -440,62 +440,26 @@ impl<'a> Renderer<'a> {
 
         self.canvas
             .with_texture_canvas(background_sprite_texture, |canvas| {
-                canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
-                canvas.clear();
-
-                let mut sprites = ppu.get_oam_sprite_data();
-                sprites.reverse();
-
-                for sprite_data in sprites {
-                    if sprite_data.draw_priority == DrawPriority::Foreground {
-                        continue;
-                    }
-
-                    let pattern_bank = match sprite_data.tile_pattern {
-                        PatternTableSelection::Left => &left_pattern_bank,
-                        PatternTableSelection::Right => &right_pattern_bank,
-                    };
-
-                    pattern_bank.render_sprite_ex(
-                        canvas,
-                        sprite_data.tile_number,
-                        sprite_data.color_palette,
-                        Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
-                        sprite_data.flip_horizontal,
-                        sprite_data.flip_vertical,
-                    )
-                }
+                Self::render_sprites(
+                    DrawPriority::Background,
+                    canvas,
+                    ppu,
+                    &left_pattern_bank,
+                    &right_pattern_bank,
+                );
             })
             .unwrap();
 
         let foreground_sprite_texture = &mut self.foreground_sprite_texture;
         self.canvas
             .with_texture_canvas(foreground_sprite_texture, |canvas| {
-                canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
-                canvas.clear();
-
-                let mut sprites = ppu.get_oam_sprite_data();
-                sprites.reverse();
-
-                for sprite_data in sprites {
-                    if sprite_data.draw_priority == DrawPriority::Background {
-                        continue;
-                    }
-
-                    let pattern_bank = match sprite_data.tile_pattern {
-                        PatternTableSelection::Left => &left_pattern_bank,
-                        PatternTableSelection::Right => &right_pattern_bank,
-                    };
-
-                    pattern_bank.render_sprite_ex(
-                        canvas,
-                        sprite_data.tile_number,
-                        sprite_data.color_palette,
-                        Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
-                        sprite_data.flip_horizontal,
-                        sprite_data.flip_vertical,
-                    )
-                }
+                Self::render_sprites(
+                    DrawPriority::Foreground,
+                    canvas,
+                    ppu,
+                    &left_pattern_bank,
+                    &right_pattern_bank,
+                );
             })
             .unwrap();
 
@@ -543,11 +507,16 @@ impl<'a> Renderer<'a> {
                 canvas.set_draw_color(Color::RGBA(r, g, b, a));
                 canvas.clear();
 
-                canvas.copy(&background_sprite_texture, None, None).unwrap();
+                if ppu.is_sprite_rendering_enabled() {
+                    canvas.copy(&background_sprite_texture, None, None).unwrap();
+                }
+
                 canvas.copy(background_texture, None, None).unwrap();
                 canvas.copy(debug_texture, None, None).unwrap();
 
-                canvas.copy(foreground_sprite_texture, None, None).unwrap();
+                if ppu.is_sprite_rendering_enabled() {
+                    canvas.copy(foreground_sprite_texture, None, None).unwrap();
+                }
             })
             .unwrap();
 
@@ -576,5 +545,39 @@ impl<'a> Renderer<'a> {
             .unwrap();
 
         self.canvas.present();
+    }
+
+    fn render_sprites(
+        draw_priority: DrawPriority,
+        canvas: &mut Canvas<Window>,
+        ppu: &Ppu,
+        left_pattern_bank: &PatternBank,
+        right_pattern_bank: &PatternBank,
+    ) {
+        canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
+        canvas.clear();
+
+        let mut sprites = ppu.get_oam_sprite_data();
+        sprites.reverse();
+
+        for sprite_data in sprites {
+            if sprite_data.draw_priority != draw_priority {
+                continue;
+            }
+
+            let pattern_bank = match sprite_data.tile_pattern {
+                PatternTableSelection::Left => &left_pattern_bank,
+                PatternTableSelection::Right => &right_pattern_bank,
+            };
+
+            pattern_bank.render_sprite_ex(
+                canvas,
+                sprite_data.tile_number,
+                sprite_data.color_palette,
+                Rect::new(sprite_data.x as i32, sprite_data.y as i32, 8, 8),
+                sprite_data.flip_horizontal,
+                sprite_data.flip_vertical,
+            )
+        }
     }
 }
