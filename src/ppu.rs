@@ -109,6 +109,12 @@ pub enum ScanlineEffect {
     EnterVblank,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Mirroring {
+    Horizontal,
+    Vertical,
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
@@ -129,6 +135,7 @@ pub struct Ppu {
     current_scanline: u32,
 
     frame_buffer: [[u8; 256]; 240],
+    mirroring: Mirroring,
 }
 
 pub struct ColorPalette {
@@ -138,7 +145,7 @@ pub struct ColorPalette {
 }
 
 impl Ppu {
-    pub fn new(memory: VideoMemoryBuffer) -> Ppu {
+    pub fn new(memory: VideoMemoryBuffer, mirroring: Mirroring) -> Ppu {
         Ppu {
             memory,
             write_latch: WriteLatch::Zero,
@@ -158,6 +165,7 @@ impl Ppu {
             status: PpuStatus::empty(),
 
             current_scanline: 261,
+            mirroring,
         }
     }
 
@@ -209,6 +217,13 @@ impl Ppu {
         log_ppu!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
 
         self.memory[self.v as usize] = data;
+
+        let xor = match self.mirroring {
+            Mirroring::Horizontal => 0x400,
+            Mirroring::Vertical => 0x800,
+        };
+
+        self.memory[self.v as usize ^ xor] = data;
 
         self.v = self.v.wrapping_add(self.control.address_increment());
     }

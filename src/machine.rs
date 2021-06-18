@@ -30,7 +30,7 @@ impl Machine {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new(video_memory),
+            ppu: Ppu::new(video_memory, rom.mirroring()),
         };
 
         // println!("chr rom {:?}", &rom.chr_rom_data());
