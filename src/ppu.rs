@@ -162,6 +162,7 @@ pub enum SpriteDrawingMode {
 
 fn map_mirror(address: u16) -> u16 {
     match address {
+        0x3000..=0x3eff => address - 0x1000,
         0x3f20..=0x3fff => (address - 0x3f00) % 0x20 + 0x3f00,
         _ => address,
     }
@@ -252,7 +253,7 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8) {
-        log_ppu!("Write $2007 {:#02X?} at {:#04X?}", data, self.v);
+        log_ppu!("Write $2007 {:#04X?} at {:#06X?}", data, self.v);
 
         let real_address = map_mirror(self.v);
 

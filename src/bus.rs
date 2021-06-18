@@ -39,8 +39,19 @@ pub struct RealBus {
     pub ppu: Ppu,
 }
 
+fn unmirror(address: u16) -> u16 {
+    match address {
+        0x0800..=0x0fff => address - 0x0800,
+        0x1000..=0x17ff => address - 0x1000,
+        0x1800..=0x1fff => address - 0x1800,
+        0x2008..=0x3fff => 0x2000 + (address - 0x2000) % 8,
+        _ => address,
+    }
+}
+
 impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
+        let address = unmirror(address);
         match address {
             0x2002 => {
                 log_ppu!("Read $2002: {:#010b}", self.ppu.get_status().bits());
@@ -88,6 +99,7 @@ impl BusTrait for RealBus {
     }
 
     fn write_address(&mut self, address: u16, value: u8) {
+        let address = unmirror(address);
         match address {
             0x2000 => {
                 self.ppu.set_control(PpuControl::from_bits(value).unwrap());
