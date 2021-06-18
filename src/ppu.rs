@@ -226,16 +226,27 @@ impl Ppu {
 
     pub fn read_data(&mut self) -> u8 {
         let last_buffer = self.read_buffer;
-        log_ppu!("Read $2007 at {:#06X}: {:#04X?}", self.v, last_buffer);
-
         let real_address = map_mirror(self.v);
-        self.read_buffer = self.memory[real_address as usize];
 
-        self.v = self.v.wrapping_add(self.control.address_increment());
+        log_ppu!(
+            "Read $2007 at {:#06X} ({:#06X}): {:#04X?}",
+            self.v,
+            real_address,
+            last_buffer
+        );
 
-        if real_address >= 0x3f00 {
-            self.read_buffer
+        if self.v >= 0x3f00 {
+            let value = self.memory[real_address as usize];
+            self.read_buffer = self.memory[self.v as usize - 0x1000];
+
+            self.v = self.v.wrapping_add(self.control.address_increment());
+
+            value
         } else {
+            self.read_buffer = self.memory[real_address as usize];
+
+            self.v = self.v.wrapping_add(self.control.address_increment());
+
             last_buffer
         }
     }
