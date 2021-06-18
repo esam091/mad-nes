@@ -225,6 +225,10 @@ impl Ppu {
         self.current_oam_address += 1;
     }
 
+    pub fn read_oam_data(&self) -> u8 {
+        self.oam_data[self.current_oam_address as usize]
+    }
+
     pub fn read_data(&mut self) -> u8 {
         let last_buffer = self.read_buffer;
         let real_address = map_mirror(self.v);
@@ -299,7 +303,10 @@ impl Ppu {
     }
 
     pub fn copy_oam_data(&mut self, data: &[u8]) {
-        &self.oam_data.copy_from_slice(data);
+        for index in 0..=255 {
+            self.oam_data[self.current_oam_address.wrapping_add(index) as usize] =
+                data[index as usize];
+        }
     }
 
     pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
