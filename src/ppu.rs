@@ -58,6 +58,7 @@ bitflags! {
 
 bitflags! {
     pub struct PpuMask: u8 {
+        const GREYSCALE = 0b00000001;
         const SHOW_SPRITES = 0b00010000;
         const SHOW_BACKGROUND = 0b00001000;
         const SHOW_LEFTMOST_SPRITES = 0b00000100;
