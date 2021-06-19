@@ -53,16 +53,8 @@ impl BusTrait for RealBus {
     fn read_address(&mut self, address: u16) -> u8 {
         let address = unmirror(address);
         match address {
-            0x2002 => {
-                log_ppu!("Read $2002: {:#010b}", self.ppu.get_status().bits());
-                self.ppu.clear_address_latch();
-                return self.ppu.get_status().bits();
-            }
-            0x2004 => {
-                let data = self.ppu.read_oam_data();
-                log_ppu!("Read $2004: {:#04X}", data);
-                data
-            }
+            0x2002 => self.ppu.read_status(),
+            0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {

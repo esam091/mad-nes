@@ -198,16 +198,34 @@ impl Ppu {
     }
 
     pub fn set_control(&mut self, value: PpuControl) {
-        log_ppu!("Write $2000: {:#010b}", value);
+        log_ppu!(
+            "[{:#03}] Write $2000: {:#010b}",
+            self.current_scanline,
+            value
+        );
         self.control = value;
         self.t &= !0xc00;
         self.t |= (value.bits() as u16 & 0b11) << 10;
     }
 
     pub fn set_mask(&mut self, value: PpuMask) {
-        log_ppu!("Write $2001: {:#08b}", value);
+        log_ppu!(
+            "[{:#03}] Write $2001: {:#010b}",
+            self.current_scanline,
+            value
+        );
         self.mask = value;
         // dbg!(self.mask);
+    }
+
+    pub fn read_status(&mut self) -> u8 {
+        log_ppu!(
+            "[{:#03}] Read $2002: {:#010b}",
+            self.current_scanline,
+            self.status
+        );
+        self.clear_address_latch();
+        self.status.bits()
     }
 
     pub fn clear_address_latch(&mut self) {
@@ -215,17 +233,26 @@ impl Ppu {
     }
 
     pub fn set_oam_address(&mut self, address: u8) {
-        log_ppu!("Write $2003: {:#04X}", address);
+        log_ppu!(
+            "[{:#03}] Write $2003: {:#04X}",
+            self.current_scanline,
+            address
+        );
         self.current_oam_address = address;
     }
 
     pub fn write_oam_data(&mut self, data: u8) {
-        log_ppu!("Write $2004: {:#04X}", data);
+        log_ppu!("[{:#03}] Write $2004: {:#04X}", self.current_scanline, data);
         self.oam_data[self.current_oam_address as usize] = data;
         self.current_oam_address += 1;
     }
 
     pub fn read_oam_data(&self) -> u8 {
+        log_ppu!(
+            "[{:#03}] Read $2004: {:#04X}",
+            self.current_scanline,
+            self.oam_data[self.current_oam_address as usize]
+        );
         self.oam_data[self.current_oam_address as usize]
     }
 
@@ -257,7 +284,12 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8) {
-        log_ppu!("Write $2007 {:#04X?} at {:#06X?}", data, self.v);
+        log_ppu!(
+            "[{:03}] Write $2007 {:#04X?} at {:#06X?}",
+            self.current_scanline,
+            data,
+            self.v
+        );
 
         let real_address = map_mirror(self.v);
 
@@ -282,7 +314,12 @@ impl Ppu {
     }
 
     pub fn write_scroll(&mut self, position: u8) {
-        log_ppu!("Write $2005({:?}): {:#02X?}", self.write_latch, position);
+        log_ppu!(
+            "[{:#03}] Write $2005({:?}): {:#02X?}",
+            self.current_scanline,
+            self.write_latch,
+            position
+        );
         match self.write_latch {
             WriteLatch::Zero => {
                 self.x = position & 0b00000111;
@@ -363,7 +400,11 @@ impl Ppu {
     }
 
     pub fn write_address(&mut self, address: u8) {
-        log_ppu!("Write $2006: {:#04X?}", address);
+        log_ppu!(
+            "[{:#03}] Write $2006: {:#04X?}",
+            self.current_scanline,
+            address
+        );
         match self.write_latch {
             WriteLatch::Zero => {
                 let value = address & 0b00111111;
