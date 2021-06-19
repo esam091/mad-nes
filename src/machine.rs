@@ -43,7 +43,7 @@ impl Machine {
     pub fn step(&mut self) -> Option<SideEffect> {
         let result = self.cpu.step();
 
-        if self.cycle_counter.advance(result.cycles_elapsed) {
+        if self.cycle_counter.advance(result.cycles_elapsed * 3) {
             self.cpu.bus.ppu.advance_scanline();
 
             if self.cpu.bus.ppu.get_current_scanline() == 241 {
@@ -91,7 +91,7 @@ struct ScanlineCycleCounter {
 impl ScanlineCycleCounter {
     fn advance(&mut self, cycles: u32) -> bool {
         if cycles >= self.scanline_cycles_left {
-            self.scanline_cycles_left = 113 + self.scanline_cycles_left - cycles;
+            self.scanline_cycles_left = 341 + self.scanline_cycles_left - cycles;
             return true;
         } else {
             self.scanline_cycles_left -= cycles;
@@ -101,7 +101,7 @@ impl ScanlineCycleCounter {
 
     fn new() -> ScanlineCycleCounter {
         ScanlineCycleCounter {
-            scanline_cycles_left: 113,
+            scanline_cycles_left: 341,
         }
     }
 }
