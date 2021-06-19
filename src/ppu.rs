@@ -613,8 +613,8 @@ impl Ppu {
                     self.v = (self.v & !0x03E0) | (y << 5);
                 }
             }
-            240 => {}
-            241 => self.status.insert(PpuStatus::IN_VBLANK),
+            241 => {}
+            240 => self.status.insert(PpuStatus::IN_VBLANK),
             242..=260 => {}
             _ => panic!("Unhandled scanline: {}", self.current_scanline),
         }
