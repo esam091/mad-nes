@@ -16,6 +16,7 @@ pub enum SideEffect {
 pub struct Machine {
     cpu: Cpu,
     cycle_counter: ScanlineCycleCounter,
+    pending_cycles: u32,
 }
 
 impl Machine {
@@ -37,13 +38,26 @@ impl Machine {
         return Ok(Machine {
             cpu: Cpu::load(&rom, bus),
             cycle_counter: ScanlineCycleCounter::new(),
+            pending_cycles: 0,
         });
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
-        let result = self.cpu.step();
+        let cycles_used: u32;
+        if self.pending_cycles == 0 {
+            let result = self.cpu.step();
+            let cycles = (result.cycles_elapsed + result.has_dma as u32 * 514) * 3;
+            self.pending_cycles = cycles;
+            cycles_used = cycles.min(self.cycle_counter.scanline_cycles_left);
+        } else {
+            cycles_used = self
+                .pending_cycles
+                .min(self.cycle_counter.scanline_cycles_left);
+        }
 
-        if self.cycle_counter.advance(result.cycles_elapsed * 3) {
+        self.pending_cycles -= cycles_used;
+
+        if self.cycle_counter.advance(cycles_used) {
             self.cpu.bus.ppu.advance_scanline();
 
             if self.cpu.bus.ppu.get_current_scanline() == 241 {

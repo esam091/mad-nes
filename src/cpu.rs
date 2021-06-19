@@ -20,6 +20,7 @@ pub enum SideEffect {
 pub struct CpuResult {
     pub cycles_elapsed: u32,
     pub side_effect: Option<SideEffect>,
+    pub has_dma: bool,
 }
 
 #[inline(always)]
@@ -27,6 +28,7 @@ fn cycles(cycles_elapsed: u32) -> CpuResult {
     CpuResult {
         cycles_elapsed: cycles_elapsed,
         side_effect: None,
+        has_dma: false,
     }
 }
 
@@ -413,21 +415,25 @@ impl Cpu {
             Instruction::LsrZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.lsr_address(address as u16),
+                has_dma: false,
             },
 
             Instruction::LsrXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.lsr_address(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::LsrAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.lsr_address(address),
+                has_dma: false,
             },
 
             Instruction::LsrXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.lsr_address(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::Asl => {
@@ -438,21 +444,25 @@ impl Cpu {
             Instruction::AslZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.asl_address(address as u16),
+                has_dma: false,
             },
 
             Instruction::AslXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.asl_address(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::AslAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.asl_address(address),
+                has_dma: false,
             },
 
             Instruction::AslXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.asl_address(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::Ror => {
@@ -463,21 +473,25 @@ impl Cpu {
             Instruction::RorZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.ror_address(address as u16),
+                has_dma: false,
             },
 
             Instruction::RorXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.ror_address(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::RorAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.ror_address(address),
+                has_dma: false,
             },
 
             Instruction::RorXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.ror_address(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::Rol => {
@@ -488,72 +502,89 @@ impl Cpu {
             Instruction::RolZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.rol_address(address as u16),
+                has_dma: false,
             },
 
             Instruction::RolXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rol_address(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::RolAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rol_address(address),
+                has_dma: false,
             },
 
             Instruction::RolXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.rol_address(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::IncZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.inc(address as u16),
+                has_dma: false,
             },
 
             Instruction::IncXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.inc(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::IncAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.inc(address),
+                has_dma: false,
             },
 
             Instruction::IncXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.inc(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::DecZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.dec(address as u16),
+                has_dma: false,
             },
 
             Instruction::DecXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.dec(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::DecAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.dec(address),
+                has_dma: false,
             },
 
             Instruction::DecXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.dec(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::StaAbsolute(address) => {
-                if address == 0x4016 {
+                if address == 0x4014 {
                     self.bus.write_address(address, self.a);
-                    return cycles(4);
+                    return CpuResult {
+                        cycles_elapsed: 4,
+                        side_effect: None,
+                        has_dma: true,
+                    };
                 } else {
                     let side_effect = self.set_memory_value(address, self.a);
                     return CpuResult {
                         cycles_elapsed: 4,
                         side_effect,
+                        has_dma: false,
                     };
                 }
             }
@@ -565,6 +596,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 5,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -575,6 +607,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 5,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -813,6 +846,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 3,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -823,6 +857,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 4,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -831,6 +866,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 3,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -841,6 +877,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 4,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -849,6 +886,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 4,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -859,6 +897,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 6,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -869,6 +908,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 6,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -878,6 +918,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 3,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -888,6 +929,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 4,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -897,6 +939,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 4,
                     side_effect,
+                    has_dma: false,
                 }
             }
 
@@ -1075,22 +1118,26 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 6,
                     side_effect: self.sax(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::SaxZeroPage(address) => CpuResult {
                 cycles_elapsed: 3,
                 side_effect: self.sax(address as u16),
+                has_dma: false,
             },
 
             Instruction::SaxYZeroPage(address) => CpuResult {
                 cycles_elapsed: 4,
                 side_effect: self.sax(self.zero_page_address(address, self.y) as u16),
+                has_dma: false,
             },
 
             Instruction::SaxAbsolute(address) => CpuResult {
                 cycles_elapsed: 4,
                 side_effect: self.sax(address),
+                has_dma: false,
             },
 
             Instruction::DcpXIndexedIndirect(index) => {
@@ -1098,6 +1145,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.dcp(address),
+                    has_dma: false,
                 }
             }
 
@@ -1106,32 +1154,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.dcp(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::DcpZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.dcp(address as u16),
+                has_dma: false,
             },
 
             Instruction::DcpXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.dcp(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::DcpAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.dcp(address),
+                has_dma: false,
             },
 
             Instruction::DcpXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.dcp(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::DcpYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.dcp(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
 
             Instruction::IsbXIndexedIndirect(index) => {
@@ -1139,6 +1193,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.isb(address),
+                    has_dma: false,
                 }
             }
 
@@ -1147,32 +1202,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.isb(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::IsbZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.isb(address as u16),
+                has_dma: false,
             },
 
             Instruction::IsbXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.isb(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::IsbAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.isb(address),
+                has_dma: false,
             },
 
             Instruction::IsbXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.isb(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::IsbYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.isb(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
 
             Instruction::SloXIndexedIndirect(index) => {
@@ -1180,6 +1241,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.slo(address),
+                    has_dma: false,
                 }
             }
 
@@ -1188,32 +1250,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.slo(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::SloZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.slo(address as u16),
+                has_dma: false,
             },
 
             Instruction::SloXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.slo(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::SloAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.slo(address),
+                has_dma: false,
             },
 
             Instruction::SloXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.slo(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::SloYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.slo(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
 
             Instruction::RlaXIndexedIndirect(index) => {
@@ -1221,6 +1289,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.rla(address),
+                    has_dma: false,
                 }
             }
 
@@ -1229,32 +1298,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.rla(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::RlaZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.rla(address as u16),
+                has_dma: false,
             },
 
             Instruction::RlaXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rla(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::RlaAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rla(address),
+                has_dma: false,
             },
 
             Instruction::RlaXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.rla(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::RlaYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.rla(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
 
             Instruction::SreXIndexedIndirect(index) => {
@@ -1262,6 +1337,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.sre(address),
+                    has_dma: false,
                 }
             }
 
@@ -1270,32 +1346,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.sre(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::SreZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.sre(address as u16),
+                has_dma: false,
             },
 
             Instruction::SreXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.sre(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::SreAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.sre(address),
+                has_dma: false,
             },
 
             Instruction::SreXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.sre(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::SreYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.sre(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
 
             Instruction::RraXIndexedIndirect(index) => {
@@ -1303,6 +1385,7 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.rra(address),
+                    has_dma: false,
                 }
             }
 
@@ -1311,32 +1394,38 @@ impl Cpu {
                 CpuResult {
                     cycles_elapsed: 8,
                     side_effect: self.rra(address),
+                    has_dma: false,
                 }
             }
 
             Instruction::RraZeroPage(address) => CpuResult {
                 cycles_elapsed: 5,
                 side_effect: self.rra(address as u16),
+                has_dma: false,
             },
 
             Instruction::RraXZeroPage(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rra(self.zero_page_address(address, self.x) as u16),
+                has_dma: false,
             },
 
             Instruction::RraAbsolute(address) => CpuResult {
                 cycles_elapsed: 6,
                 side_effect: self.rra(address),
+                has_dma: false,
             },
 
             Instruction::RraXAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.rra(self.absolute_address(address, self.x).0),
+                has_dma: false,
             },
 
             Instruction::RraYAbsolute(address) => CpuResult {
                 cycles_elapsed: 7,
                 side_effect: self.rra(self.absolute_address(address, self.y).0),
+                has_dma: false,
             },
         }
     }
@@ -1826,7 +1915,7 @@ mod test {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new([0; 0x4000]),
+            ppu: Ppu::new([0; 0x4000], crate::ppu::Mirroring::Horizontal),
         };
         let mut cycles = 7;
         let mut cpu = Cpu::load(&InesRom::load("nestest.nes").ok().unwrap(), bus);

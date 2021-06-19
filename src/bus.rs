@@ -26,7 +26,7 @@ pub enum JoypadButton {
 
 pub trait BusTrait {
     fn read_address(&mut self, address: u16) -> u8;
-    fn write_address(&mut self, address: u16, value: u8);
+    fn write_address(&mut self, address: u16, value: u8) -> bool;
 }
 
 pub type MemoryBuffer = [u8; 0x10000];
@@ -99,7 +99,8 @@ impl BusTrait for RealBus {
         }
     }
 
-    fn write_address(&mut self, address: u16, value: u8) {
+    #[must_use]
+    fn write_address(&mut self, address: u16, value: u8) -> bool {
         let address = unmirror(address);
         match address {
             0x2000 => {
@@ -120,7 +121,7 @@ impl BusTrait for RealBus {
                 let slice = &self.memory[starting_address..=starting_address + 0xff];
                 self.ppu.copy_oam_data(slice);
 
-                // TODO: advance cycles
+                return true;
             }
             0x4016 => match (self.joypad_state, value & 1) {
                 // On nestest, the value is 9 and 8 instead of 1 and 0, we take
@@ -133,5 +134,7 @@ impl BusTrait for RealBus {
             },
             _ => self.memory[address as usize] = value,
         }
+
+        false
     }
 }
