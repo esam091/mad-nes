@@ -624,6 +624,13 @@ impl Ppu {
 
     fn toggle_sprite_0_hit_if_needed(&mut self) {
         if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
+            if !self
+                .mask
+                .contains(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES)
+            {
+                return;
+            }
+
             // todo: handle 8 x 16 sprites
 
             let sprite_y = self.oam_data[0] as u32;
