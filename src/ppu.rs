@@ -663,13 +663,20 @@ impl Ppu {
                 return;
             }
 
-            if self.current_scanline < sprite_y || self.current_scanline > sprite_y + 7 {
+            let y_limit = if self.control.contains(PpuControl::SPRITE_8X16_MODE) {
+                15
+            } else {
+                7
+            };
+
+            if self.current_scanline < sprite_y || self.current_scanline > sprite_y + y_limit {
                 return;
             }
 
             let mut sprite_fine_y = self.current_scanline - sprite_y;
             if vertical_flip {
-                sprite_fine_y = 7 - sprite_fine_y;
+                // TODO: implement y flip
+                sprite_fine_y = y_limit - sprite_fine_y;
             }
 
             let pattern_table =
