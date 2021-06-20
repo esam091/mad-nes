@@ -143,6 +143,8 @@ pub struct Ppu {
     v: u16,
 
     current_scanline: u32,
+    current_dot: u32,
+    current_fine_x: u8,
 
     frame_buffer: [[u8; 256]; 240],
     mirroring: Mirroring,
@@ -189,6 +191,8 @@ impl Ppu {
             status: PpuStatus::empty(),
 
             current_scanline: 261,
+            current_dot: 0,
+            current_fine_x: 0,
             mirroring,
         }
     }
@@ -492,107 +496,97 @@ impl Ppu {
         self.current_scanline
     }
 
-    pub fn advance_scanline(&mut self) {
-        match self.current_scanline {
-            261 => {
+    pub fn step(&mut self) {
+        match (self.current_scanline, self.current_dot) {
+            (261, 0) => {
                 self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
-                if !self.mask.is_rendering_enabled() {
-                    self.current_scanline = (self.current_scanline + 1) % 262;
-
-                    return;
+                if self.mask.is_rendering_enabled() {
+                    self.v &= !0b111101111100000;
+                    self.v |= self.t & 0b111101111100000;
                 }
-                self.v &= !0b111101111100000;
-                self.v |= self.t & 0b111101111100000;
             }
-            0..=239 => {
-                if !self.mask.is_rendering_enabled() {
-                    self.current_scanline = (self.current_scanline + 1) % 262;
-
-                    return;
-                }
-
+            (0..=239, 0..=255) => {
                 let palette = self.get_color_palette();
-                let mut fine_x = self.x;
+
                 let fine_y = (self.v & 0x7000) >> 12;
-                for target_x in 0..256 {
-                    // render
-                    let tile_address = 0x2000 | (self.v & 0xfff);
+                // render
+                let tile_address = 0x2000 | (self.v & 0xfff);
 
-                    let coarse_x = self.v & 0b11111;
-                    let coarse_y = (self.v >> 5) & 0b11111;
-                    let tile_value = self.memory[tile_address as usize];
+                let coarse_x = self.v & 0b11111;
+                let coarse_y = (self.v >> 5) & 0b11111;
+                let tile_value = self.memory[tile_address as usize];
 
-                    let attribute_address = 0x23C0
-                        | (self.v & 0x0C00)
-                        | ((self.v >> 4) & 0x38)
-                        | ((self.v >> 2) & 0x07);
-                    let attribute_value = self.memory[attribute_address as usize];
-                    let subtile_y = (coarse_y % 4) / 2;
-                    let subtile_x = (coarse_x % 4) / 2;
+                let attribute_address =
+                    0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
+                let attribute_value = self.memory[attribute_address as usize];
+                let subtile_y = (coarse_y % 4) / 2;
+                let subtile_x = (coarse_x % 4) / 2;
 
-                    let palette_set_index = match (subtile_x, subtile_y) {
-                        (0, 0) => attribute_value & 0b11,
-                        (1, 0) => attribute_value.bitand(0b1100 as u8) >> 2,
-                        (0, 1) => attribute_value.bitand(0b110000 as u8) >> 4,
-                        (1, 1) => attribute_value.bitand(0b11000000 as u8) >> 6,
-                        _ => panic!("Impossible subtile location!"),
-                    };
+                let palette_set_index = match (subtile_x, subtile_y) {
+                    (0, 0) => attribute_value & 0b11,
+                    (1, 0) => attribute_value.bitand(0b1100 as u8) >> 2,
+                    (0, 1) => attribute_value.bitand(0b110000 as u8) >> 4,
+                    (1, 1) => attribute_value.bitand(0b11000000 as u8) >> 6,
+                    _ => panic!("Impossible subtile location!"),
+                };
 
-                    let palette_value = palette.background_color_set[palette_set_index as usize];
+                let palette_value = palette.background_color_set[palette_set_index as usize];
 
-                    // dbg!(
-                    //     // hex_string(tile_address),
-                    //     // tile_value,
-                    //     coarse_x, // self.x,
-                    //     coarse_y, fine_y
-                    // );
+                // dbg!(
+                //     // hex_string(tile_address),
+                //     // tile_value,
+                //     coarse_x, // self.x,
+                //     coarse_y, fine_y
+                // );
 
-                    let pattern_address = tile_value as u16 * 0x10 + fine_y;
+                let pattern_address = tile_value as u16 * 0x10 + fine_y;
 
-                    let pattern_table = match self.current_background_pattern_table() {
-                        PatternTableSelection::Left => self.left_pattern_table(),
-                        PatternTableSelection::Right => self.right_pattern_table(),
-                    };
+                let pattern_table = match self.current_background_pattern_table() {
+                    PatternTableSelection::Left => self.left_pattern_table(),
+                    PatternTableSelection::Right => self.right_pattern_table(),
+                };
 
-                    let pattern1 = pattern_table[pattern_address as usize];
-                    let pattern2 = pattern_table[pattern_address as usize + 8];
+                let pattern1 = pattern_table[pattern_address as usize];
+                let pattern2 = pattern_table[pattern_address as usize + 8];
 
-                    let shift = 7 - fine_x;
+                let shift = 7 - self.current_fine_x;
 
-                    let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
+                let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
 
-                    // dbg!(bit);
+                // dbg!(bit);
 
-                    let color: u8 = if bit == 0 {
-                        0xff
+                let color: u8 = if bit == 0 {
+                    0xff
+                } else {
+                    palette_value[bit as usize - 1]
+                };
+
+                self.frame_buffer[self.current_scanline as usize][self.current_dot as usize] =
+                    color;
+
+                // move x
+                if self.current_fine_x == 7 {
+                    self.current_fine_x = 0;
+
+                    if (self.v & 0x001F) == 31 {
+                        self.v &= !0x001f;
+                        self.v ^= 0x400;
                     } else {
-                        palette_value[bit as usize - 1]
-                    };
-
-                    self.frame_buffer[self.current_scanline as usize][target_x] = color;
-
-                    // move x
-                    if fine_x == 7 {
-                        fine_x = 0;
-
-                        if (self.v & 0x001F) == 31 {
-                            self.v &= !0x001f;
-                            self.v ^= 0x400;
-                        } else {
-                            self.v += 1;
-                        }
-                    } else {
-                        fine_x += 1;
+                        self.v += 1;
                     }
+                } else {
+                    self.current_fine_x += 1;
                 }
-
+            }
+            (0..=239, 256) => {
                 self.v &= !0b10000011111;
                 self.v |= self.t & 0b10000011111;
 
-                // dbg!(hex_string(self.v), binary_string(self.v));
-
+                self.current_fine_x = self.x;
+            }
+            (0..=239, 257) => {
                 self.toggle_sprite_0_hit_if_needed();
 
                 if self.v & 0x7000 != 0x7000 {
@@ -613,13 +607,26 @@ impl Ppu {
                     self.v = (self.v & !0x03E0) | (y << 5);
                 }
             }
-            241 => {}
-            240 => self.status.insert(PpuStatus::IN_VBLANK),
-            242..=260 => {}
-            _ => panic!("Unhandled scanline: {}", self.current_scanline),
+            (241, 0) => self.status.insert(PpuStatus::IN_VBLANK),
+            (240, _) => {}
+            (242..=260, _) => {}
+            _ => {}
         }
 
-        self.current_scanline = (self.current_scanline + 1) % 262;
+        if self.current_dot == 341 {
+            self.current_scanline = (self.current_scanline + 1) % 262;
+            self.current_dot = 0;
+        } else {
+            self.current_dot += 1;
+        }
+    }
+
+    pub fn advance_scanline(&mut self) {
+        for _ in 0..341 {
+            self.step();
+        }
+
+        // self.current_scanline = (self.current_scanline + 1) % 262;
     }
 
     fn toggle_sprite_0_hit_if_needed(&mut self) {
