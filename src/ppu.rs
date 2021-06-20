@@ -228,6 +228,7 @@ impl Ppu {
             self.current_scanline,
             self.status
         );
+        self.clear_address_latch();
         let bits = self.status.bits();
         self.status.remove(PpuStatus::IN_VBLANK);
         bits
