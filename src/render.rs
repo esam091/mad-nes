@@ -508,14 +508,18 @@ impl<'a> Renderer<'a> {
                 canvas.clear();
 
                 if ppu.is_sprite_rendering_enabled() {
-                    canvas.copy(&background_sprite_texture, None, None).unwrap();
+                    canvas
+                        .copy(&background_sprite_texture, None, Rect::new(0, 1, 256, 240))
+                        .unwrap();
                 }
 
                 canvas.copy(background_texture, None, None).unwrap();
                 canvas.copy(debug_texture, None, None).unwrap();
 
                 if ppu.is_sprite_rendering_enabled() {
-                    canvas.copy(foreground_sprite_texture, None, None).unwrap();
+                    canvas
+                        .copy(foreground_sprite_texture, None, Rect::new(0, 1, 256, 240))
+                        .unwrap();
                 }
             })
             .unwrap();

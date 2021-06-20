@@ -656,8 +656,6 @@ impl Ppu {
             let vertical_flip = self.oam_data[2] & 0x80 != 0;
             let horizontal_flip = self.oam_data[2] & 0x40 != 0;
 
-            // Need to add 1 to sprite y for some reason otherwise I fail the sprite 0 alignment test.
-            // gonna check back later
             let sprite_y = self.oam_data[0] as u32 + 1;
             let sprite_x = self.oam_data[3];
 
