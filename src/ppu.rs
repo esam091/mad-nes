@@ -228,8 +228,9 @@ impl Ppu {
             self.current_scanline,
             self.status
         );
-        self.clear_address_latch();
-        self.status.bits()
+        let bits = self.status.bits();
+        self.status.remove(PpuStatus::IN_VBLANK);
+        bits
     }
 
     pub fn clear_address_latch(&mut self) {
@@ -499,7 +500,7 @@ impl Ppu {
     pub fn step(&mut self) -> bool {
         let mut should_render = false;
         match (self.current_scanline, self.current_dot) {
-            (261, 0) => {
+            (261, 1) => {
                 self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
@@ -616,7 +617,7 @@ impl Ppu {
                     }
                 }
             }
-            (241, 0) => {
+            (241, 1) => {
                 self.status.insert(PpuStatus::IN_VBLANK);
                 should_render = true
             }
