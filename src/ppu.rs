@@ -594,7 +594,7 @@ impl Ppu {
                 }
             }
             (0..=239, 257) => {
-                // self.toggle_sprite_0_hit_if_needed();
+                self.toggle_sprite_0_hit_if_needed();
 
                 if self.is_background_rendering_enabled() {
                     if self.v & 0x7000 != 0x7000 {
