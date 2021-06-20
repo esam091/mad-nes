@@ -670,7 +670,7 @@ impl Cpu {
 
             Instruction::LdyAbsolute(address) => {
                 self.y = self.bus.read_address(address);
-                self.toggle_zero_negative_flag(self.x);
+                self.toggle_zero_negative_flag(self.y);
 
                 cycles(4)
             }
