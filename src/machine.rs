@@ -43,35 +43,27 @@ impl Machine {
     }
 
     pub fn step(&mut self) -> Option<SideEffect> {
-        let cycles_used: u32;
         if self.pending_cycles == 0 {
             let result = self.cpu.step();
-            let cycles = (result.cycles_elapsed + result.has_dma as u32 * 514) * 3;
+            let cycles = result.cycles_elapsed + result.has_dma as u32 * 514;
             self.pending_cycles = cycles;
-            cycles_used = cycles.min(self.cycle_counter.scanline_cycles_left);
-        } else {
-            cycles_used = self
-                .pending_cycles
-                .min(self.cycle_counter.scanline_cycles_left);
         }
 
-        self.pending_cycles -= cycles_used;
+        self.pending_cycles -= 1;
 
-        if self.cycle_counter.advance(cycles_used) {
-            self.cpu.bus.ppu.advance_scanline();
+        let mut should_render = false;
+        for _ in 0..3 {
+            let result = self.cpu.bus.ppu.step();
+            should_render = should_render || result;
+        }
 
-            if self.cpu.bus.ppu.get_current_scanline() == 241 {
-                return Some(SideEffect::Render);
-            }
-
-            if self.cpu.bus.ppu.get_current_scanline() == 242
-                && self.cpu.bus.ppu.generates_nmi_at_vblank()
-            {
+        if should_render {
+            if self.cpu.bus.ppu.generates_nmi_at_vblank() {
                 log_ppu!("Enter vblank");
                 self.cpu.enter_nmi();
             }
 
-            return None;
+            return Some(SideEffect::Render);
         }
         None
     }
