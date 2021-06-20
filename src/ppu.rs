@@ -682,8 +682,16 @@ impl Ppu {
             let left_tile = pattern_table[pattern_row];
             let right_tile = pattern_table[pattern_row + 8];
 
+            let include_leftmost_tile = self
+                .mask
+                .contains(PpuMask::SHOW_LEFTMOST_BACKGROUND | PpuMask::SHOW_LEFTMOST_SPRITES);
+
             for i in 0..8 {
                 let x = sprite_x + i;
+
+                if !include_leftmost_tile && x < 8 {
+                    continue;
+                }
 
                 let and = if !horizontal_flip {
                     1 << (7 - i)
