@@ -661,6 +661,10 @@ impl Ppu {
             let sprite_y = self.oam_data[0] as u32 + 1;
             let sprite_x = self.oam_data[3];
 
+            if sprite_x == 255 {
+                return;
+            }
+
             if self.current_scanline < sprite_y || self.current_scanline > sprite_y + 7 {
                 return;
             }
@@ -689,7 +693,7 @@ impl Ppu {
             for i in 0..8 {
                 let x = sprite_x + i;
 
-                if !include_leftmost_tile && x < 8 {
+                if x == 255 || (!include_leftmost_tile && x < 8) {
                     continue;
                 }
 
