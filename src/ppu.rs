@@ -653,7 +653,9 @@ impl Ppu {
 
             // todo: handle 8 x 16 sprites
 
-            let sprite_y = self.oam_data[0] as u32;
+            // Need to add 1 to sprite y for some reason otherwise I fail the sprite 0 alignment test.
+            // gonna check back later
+            let sprite_y = self.oam_data[0] as u32 + 1;
             let sprite_x = self.oam_data[3];
 
             if self.current_scanline < sprite_y || self.current_scanline > sprite_y + 7 {
@@ -676,11 +678,12 @@ impl Ppu {
 
             for i in 0..8 {
                 let x = sprite_x + i;
-
+                let and = 1 << (7 - i);
                 if self.frame_buffer[self.current_scanline as usize][x as usize] != 0xff
-                    && (left_tile & (1 << x) != 0 || right_tile & (1 << x) != 0)
+                    && (left_tile & and != 0 || right_tile & and != 0)
                 {
                     self.status.insert(PpuStatus::SPRITE_0_HIT);
+                    return;
                 }
             }
         }
