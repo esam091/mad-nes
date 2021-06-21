@@ -1,6 +1,7 @@
 use std::{collections::HashSet, convert::TryInto};
 
 use crate::{
+    ines::Cartridge,
     log_ppu,
     ppu::{Ppu, PpuControl, PpuMask},
 };
@@ -31,12 +32,12 @@ pub trait BusTrait {
 
 pub type MemoryBuffer = [u8; 0x10000];
 
-#[derive(PartialEq, Eq)]
 pub struct RealBus {
     pub memory: MemoryBuffer,
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
     pub ppu: Ppu,
+    pub cartridge: Box<Cartridge>,
 }
 
 fn unmirror(address: u16) -> u16 {
@@ -87,6 +88,7 @@ impl BusTrait for RealBus {
 
                 return value;
             }
+            0x8000..=0xffff => self.cartridge.read_address(address),
             _ => self.memory[address as usize],
         }
     }
@@ -124,6 +126,7 @@ impl BusTrait for RealBus {
                     self.joypad_state, value
                 ),
             },
+            0x8000..=0xffff => self.cartridge.write_address(address, value),
             _ => self.memory[address as usize] = value,
         }
 

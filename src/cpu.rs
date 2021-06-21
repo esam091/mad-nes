@@ -32,7 +32,6 @@ fn cycles(cycles_elapsed: u32) -> CpuResult {
     }
 }
 
-#[derive(PartialEq, Eq)]
 pub struct Cpu {
     // memory: MemoryBuffer,
     pc: u16,
@@ -1841,20 +1840,11 @@ impl Cpu {
     //     }
     // }
 
-    pub fn load(rom: &InesRom, mut bus: RealBus) -> Cpu {
-        let mut memory = [0 as u8; 0x10000];
-
-        memory[0x8000..0x8000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
-        if rom.prg_rom_data().len() == 0x4000 {
-            memory[0xc000..0xc000 + rom.prg_rom_data().len()].copy_from_slice(&rom.prg_rom_data());
-        }
-
+    pub fn load(mut bus: RealBus) -> Cpu {
         // jump to reset vector
-        let reset_vector = u16::from_le_bytes([memory[0xfffc], memory[0xfffd]]);
-        let nmi_vector = u16::from_le_bytes([memory[0xfffa], memory[0xfffb]]);
-        let irq_vector = u16::from_le_bytes([memory[0xfffe], memory[0xffff]]);
-
-        bus.memory = memory;
+        let reset_vector = u16::from_le_bytes([bus.read_address(0xfffc), bus.read_address(0xfffd)]);
+        let nmi_vector = u16::from_le_bytes([bus.read_address(0xfffa), bus.read_address(0xfffb)]);
+        let irq_vector = u16::from_le_bytes([bus.read_address(0xfffe), bus.read_address(0xffff)]);
 
         Cpu {
             // memory,

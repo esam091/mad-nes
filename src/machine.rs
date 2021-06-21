@@ -3,6 +3,7 @@ use std::{collections::HashSet, u8};
 use crate::{
     bus::{JoypadButton, JoypadState, MemoryBuffer, RealBus},
     cpu::Cpu,
+    ines::load_cartridge,
     log_ppu,
     ppu::Ppu,
 };
@@ -12,7 +13,6 @@ pub enum SideEffect {
     Render,
 }
 
-#[derive(PartialEq, Eq)]
 pub struct Machine {
     cpu: Cpu,
     cycle_counter: ScanlineCycleCounter,
@@ -23,6 +23,7 @@ impl Machine {
     pub fn load(file_path: &String) -> Result<Machine, std::io::Error> {
         // todo: fix error type
         let rom = InesRom::load(file_path).ok().unwrap();
+        let cartridge = load_cartridge(file_path).ok().unwrap();
 
         let mut video_memory = [0; 0x4000];
         video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
@@ -31,12 +32,13 @@ impl Machine {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new(video_memory, rom.mirroring()),
+            ppu: Ppu::new(video_memory, cartridge.mirroring()),
+            cartridge,
         };
 
         // println!("chr rom {:?}", &rom.chr_rom_data());
         return Ok(Machine {
-            cpu: Cpu::load(&rom, bus),
+            cpu: Cpu::load(bus),
             cycle_counter: ScanlineCycleCounter::new(),
             pending_cycles: 0,
         });
