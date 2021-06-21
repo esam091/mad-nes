@@ -6,6 +6,37 @@ pub trait Cartridge {
     fn mirroring(&self) -> Mirroring;
 }
 
+struct UNROM {
+    prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
+    mirroring: Mirroring,
+    current_bank: u8,
+}
+
+impl Cartridge for UNROM {
+    fn read_address(&mut self, address: u16) -> u8 {
+        let bank_size = self.prg_rom.len() / 16384;
+
+        match address {
+            0x8000..=0xbfff => {
+                self.prg_rom[address as usize - 0x8000 + self.current_bank as usize * 16384]
+            }
+            0xc000..=0xffff => self.prg_rom[address as usize - 0xc000 + (bank_size - 1) * 16384],
+            // 0xc000..=0xffff => self.prg_rom[address as usize],
+            _ => panic!("Unimplemented address read: {:#06X}", address),
+        }
+    }
+
+    fn write_address(&mut self, address: u16, value: u8) {
+        // dbg!(value, hex_string(address));
+        self.current_bank = value
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
+}
+
 struct NROM {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
@@ -66,11 +97,20 @@ pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Box<Cartridge>, RomP
         Mirroring::Vertical
     };
 
-    return Ok(Box::new(NROM {
-        prg_rom,
-        chr_rom,
-        mirroring,
-    }));
+    if bytes[6] >> 4 != 0 {
+        return Ok(Box::new(UNROM {
+            prg_rom,
+            chr_rom,
+            mirroring,
+            current_bank: 0,
+        }));
+    } else {
+        return Ok(Box::new(NROM {
+            prg_rom,
+            chr_rom,
+            mirroring,
+        }));
+    }
 }
 
 pub struct InesRom {
