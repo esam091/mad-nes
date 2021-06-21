@@ -352,57 +352,58 @@ impl Ppu {
         }
     }
 
-    pub fn get_oam_sprite_data(&self) -> Vec<SpriteData> {
+    fn get_oam_sprite_data_at(&self, index: usize) -> SpriteData {
         let drawing_mode = self.control.drawing_mode();
+        let base_index = (self.current_oam_address as usize + index) % 256;
+        let y = self.oam_data[base_index];
+        let x = self.oam_data[(base_index + 3) % 256];
 
+        let byte1 = self.oam_data[(base_index + 1) % 256];
+        let tile_pattern = if drawing_mode == SpriteDrawingMode::Draw8x8 {
+            self.control.sprite_pattern_table()
+        } else {
+            if byte1 & 1 == 0 {
+                PatternTableSelection::Left
+            } else {
+                PatternTableSelection::Right
+            }
+        };
+
+        let tile_number = if drawing_mode == SpriteDrawingMode::Draw8x8 {
+            byte1
+        } else {
+            byte1 & !1
+        };
+
+        let byte2 = self.oam_data[(base_index + 2) % 256];
+        let color_palette = byte2 & 0b00000011;
+
+        let draw_priority = if byte2 & 0b00100000 == 0 {
+            DrawPriority::Foreground
+        } else {
+            DrawPriority::Background
+        };
+
+        let flip_horizontal = byte2 & 0b01000000 != 0;
+        let flip_vertical = byte2 & 0b10000000 != 0;
+
+        SpriteData {
+            x,
+            y,
+            tile_pattern,
+            tile_number,
+            color_palette,
+            draw_priority,
+            flip_horizontal,
+            flip_vertical,
+            drawing_mode,
+        }
+    }
+
+    pub fn get_all_oam_sprite_data(&self) -> Vec<SpriteData> {
         (0usize..=255)
             .step_by(4)
-            .map(|index| {
-                let base_index = (self.current_oam_address as usize + index) % 256;
-                let y = self.oam_data[base_index];
-                let x = self.oam_data[(base_index + 3) % 256];
-
-                let byte1 = self.oam_data[(base_index + 1) % 256];
-                let tile_pattern = if drawing_mode == SpriteDrawingMode::Draw8x8 {
-                    self.control.sprite_pattern_table()
-                } else {
-                    if byte1 & 1 == 0 {
-                        PatternTableSelection::Left
-                    } else {
-                        PatternTableSelection::Right
-                    }
-                };
-
-                let tile_number = if drawing_mode == SpriteDrawingMode::Draw8x8 {
-                    byte1
-                } else {
-                    byte1 & !1
-                };
-
-                let byte2 = self.oam_data[(base_index + 2) % 256];
-                let color_palette = byte2 & 0b00000011;
-
-                let draw_priority = if byte2 & 0b00100000 == 0 {
-                    DrawPriority::Foreground
-                } else {
-                    DrawPriority::Background
-                };
-
-                let flip_horizontal = byte2 & 0b01000000 != 0;
-                let flip_vertical = byte2 & 0b10000000 != 0;
-
-                SpriteData {
-                    x,
-                    y,
-                    tile_pattern,
-                    tile_number,
-                    color_palette,
-                    draw_priority,
-                    flip_horizontal,
-                    flip_vertical,
-                    drawing_mode,
-                }
-            })
+            .map(|index| self.get_oam_sprite_data_at(index))
             .collect::<Vec<_>>()
     }
 
@@ -645,42 +646,55 @@ impl Ppu {
                 return;
             }
 
-            // todo: handle 8 x 16 sprites
+            let sprite_data = self.get_oam_sprite_data_at(0);
 
-            let vertical_flip = self.oam_data[2] & 0x80 != 0;
-            let horizontal_flip = self.oam_data[2] & 0x40 != 0;
+            let vertical_flip = sprite_data.flip_vertical;
+            let horizontal_flip = sprite_data.flip_horizontal;
 
-            let sprite_y = self.oam_data[0] as u32 + 1;
-            let sprite_x = self.oam_data[3];
+            let sprite_y = sprite_data.y as u32 + 1;
+            let sprite_x = sprite_data.x;
 
             if sprite_x == 255 {
                 return;
             }
 
-            let y_limit = if self.control.contains(PpuControl::SPRITE_8X16_MODE) {
+            let sprite_height_offset = if self.control.contains(PpuControl::SPRITE_8X16_MODE) {
                 15
             } else {
                 7
             };
 
-            if self.current_scanline < sprite_y || self.current_scanline > sprite_y + y_limit {
+            // Check whether the scanline is in sprite's y range
+            if self.current_scanline < sprite_y
+                || self.current_scanline > sprite_y + sprite_height_offset
+            {
                 return;
             }
 
             let mut sprite_fine_y = self.current_scanline - sprite_y;
+            let mut tile = sprite_data.tile_number;
+
             if vertical_flip {
-                // TODO: implement y flip
-                sprite_fine_y = y_limit - sprite_fine_y;
+                if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x8 {
+                    sprite_fine_y = sprite_height_offset - sprite_fine_y;
+                } else {
+                    // When flipping is on in 8x16 mode, the second tile is
+                    // above the first tile
+                    if sprite_fine_y < 8 {
+                        tile += 1;
+                    }
+
+                    // Split the offset into two 8 pixel length
+                    sprite_fine_y %= 8;
+                }
             }
 
-            let pattern_table =
-                if self.control.sprite_pattern_table() == PatternTableSelection::Right {
-                    self.right_pattern_table()
-                } else {
-                    self.left_pattern_table()
-                };
+            let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
+                self.right_pattern_table()
+            } else {
+                self.left_pattern_table()
+            };
 
-            let tile = self.oam_data[1];
             let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
             let left_tile = pattern_table[pattern_row];
             let right_tile = pattern_table[pattern_row + 8];

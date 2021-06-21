@@ -561,7 +561,7 @@ impl<'a> Renderer<'a> {
         canvas.set_draw_color(Color::RGBA(0, 0, 0, 0));
         canvas.clear();
 
-        let mut sprites = ppu.get_oam_sprite_data();
+        let mut sprites = ppu.get_all_oam_sprite_data();
         sprites.reverse();
 
         for sprite_data in sprites {
