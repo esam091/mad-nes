@@ -636,14 +636,6 @@ impl Ppu {
         should_render
     }
 
-    pub fn advance_scanline(&mut self) {
-        for _ in 0..341 {
-            self.step();
-        }
-
-        // self.current_scanline = (self.current_scanline + 1) % 262;
-    }
-
     fn toggle_sprite_0_hit_if_needed(&mut self) {
         if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
             if !self
