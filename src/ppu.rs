@@ -682,7 +682,7 @@ impl Ppu {
             }
 
             let pattern_table =
-                if self.control.background_pattern_table() == PatternTableSelection::Right {
+                if self.control.sprite_pattern_table() == PatternTableSelection::Right {
                     self.right_pattern_table()
                 } else {
                     self.left_pattern_table()
