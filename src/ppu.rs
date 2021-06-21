@@ -358,10 +358,11 @@ impl Ppu {
         (0usize..=255)
             .step_by(4)
             .map(|index| {
-                let y = self.oam_data[index];
-                let x = self.oam_data[index + 3];
+                let base_index = (self.current_oam_address as usize + index) % 256;
+                let y = self.oam_data[base_index];
+                let x = self.oam_data[(base_index + 3) % 256];
 
-                let byte1 = self.oam_data[index + 1];
+                let byte1 = self.oam_data[(base_index + 1) % 256];
                 let tile_pattern = if drawing_mode == SpriteDrawingMode::Draw8x8 {
                     self.control.sprite_pattern_table()
                 } else {
@@ -378,7 +379,7 @@ impl Ppu {
                     byte1 & !1
                 };
 
-                let byte2 = self.oam_data[index + 2];
+                let byte2 = self.oam_data[(base_index + 2) % 256];
                 let color_palette = byte2 & 0b00000011;
 
                 let draw_priority = if byte2 & 0b00100000 == 0 {
