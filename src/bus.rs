@@ -99,7 +99,6 @@ impl BusTrait for RealBus {
         match address {
             0x2000 => {
                 self.ppu.set_control(PpuControl::from_bits(value).unwrap());
-                self.memory[address as usize] = value;
             }
             0x2001 => {
                 self.ppu.set_mask(PpuMask::from_bits(value).unwrap());
