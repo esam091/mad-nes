@@ -1658,29 +1658,18 @@ impl Cpu {
 
     #[inline(always)]
     fn sbc(&mut self, value: u8) {
-        let (result, not_carry) = self
-            .a
-            .overflowing_sub(value + !self.is_carry_flag_on() as u8);
-
-        let (_, overflow) =
-            (self.a as i8).overflowing_sub(value as i8 + !self.is_carry_flag_on() as i8); // also need to check for edge cases
-
-        self.a = result;
-        self.toggle_zero_negative_flag(self.a);
-        self.set_carry_flag(!not_carry);
-        self.set_overflow_flag(overflow);
+        self.adc(!value);
     }
 
     #[inline(always)]
     fn adc(&mut self, value: u8) {
         let (result2, carry2) = value.overflowing_add(self.is_carry_flag_on() as u8);
         let (result, carry) = self.a.overflowing_add(result2);
-        let (_, overflow) = (self.a as i8).overflowing_add(value as i8); // also check for overflow with carry?
 
-        self.a = result;
-        self.toggle_zero_negative_flag(self.a);
+        self.toggle_zero_negative_flag(result);
         self.set_carry_flag(carry || carry2);
-        self.set_overflow_flag(overflow);
+        self.set_overflow_flag((self.a ^ result) & (value ^ result) & 0x80 == 0x80);
+        self.a = result;
     }
 
     #[inline(always)]
