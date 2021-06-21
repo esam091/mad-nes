@@ -307,7 +307,7 @@ impl Ppu {
             self.memory[0x3f00] = data;
         }
 
-        if real_address < 0x3f00 {
+        if real_address < 0x3f00 && real_address >= 0x2000 {
             let xor = match self.mirroring {
                 Mirroring::Horizontal => 0x400,
                 Mirroring::Vertical => 0x800,
