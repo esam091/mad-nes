@@ -1,4 +1,4 @@
-use std::{collections::HashSet, u8};
+use std::{cell::RefCell, collections::HashSet, rc::Rc, u8};
 
 use crate::{
     bus::{JoypadButton, JoypadState, MemoryBuffer, RealBus},
@@ -22,17 +22,15 @@ pub struct Machine {
 impl Machine {
     pub fn load(file_path: &String) -> Result<Machine, std::io::Error> {
         // todo: fix error type
-        let rom = InesRom::load(file_path).ok().unwrap();
         let cartridge = load_cartridge(file_path).ok().unwrap();
+        let cartridge = Rc::new(RefCell::new(cartridge));
 
-        let mut video_memory = [0; 0x4000];
-        video_memory[0..rom.chr_rom_data().len()].copy_from_slice(&rom.chr_rom_data());
-
+        let mirroring = cartridge.borrow().mirroring();
         let bus = RealBus {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new(video_memory, cartridge.mirroring()),
+            ppu: Ppu::new([0; 0x4000], mirroring, cartridge.clone()),
             cartridge,
         };
 

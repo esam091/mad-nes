@@ -1,4 +1,4 @@
-use std::{collections::HashSet, convert::TryInto};
+use std::{cell::RefCell, collections::HashSet, convert::TryInto, rc::Rc};
 
 use crate::{
     ines::Cartridge,
@@ -37,7 +37,7 @@ pub struct RealBus {
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
     pub ppu: Ppu,
-    pub cartridge: Box<Cartridge>,
+    pub cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
 }
 
 fn unmirror(address: u16) -> u16 {
@@ -88,7 +88,7 @@ impl BusTrait for RealBus {
 
                 return value;
             }
-            0x8000..=0xffff => self.cartridge.read_address(address),
+            0x8000..=0xffff => self.cartridge.borrow_mut().read_address(address),
             _ => self.memory[address as usize],
         }
     }
@@ -125,7 +125,7 @@ impl BusTrait for RealBus {
                     self.joypad_state, value
                 ),
             },
-            0x8000..=0xffff => self.cartridge.write_address(address, value),
+            0x8000..=0xffff => self.cartridge.borrow_mut().write_address(address, value),
             _ => self.memory[address as usize] = value,
         }
 

@@ -41,15 +41,17 @@ impl<'a> PpuDebugger<'a> {
         let background_color_sets = create_sdl_palette(&raw_palette.background_color_set);
         let sprite_color_sets = create_sdl_palette(&raw_palette.sprite_color_set);
 
+        let tables = ppu.pattern_tables();
+        let (left_pattern_table, right_pattern_table) = tables.get_tables();
         let left_pattern_bank = PatternBank::new(
-            ppu.left_pattern_table(),
+            left_pattern_table,
             &background_color_sets,
             &sprite_color_sets,
             self.texture_creator,
         );
 
         let right_pattern_bank = PatternBank::new(
-            ppu.right_pattern_table(),
+            right_pattern_table,
             &background_color_sets,
             &sprite_color_sets,
             self.texture_creator,

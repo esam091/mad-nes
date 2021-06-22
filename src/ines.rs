@@ -4,6 +4,9 @@ pub trait Cartridge {
     fn read_address(&mut self, address: u16) -> u8;
     fn write_address(&mut self, address: u16, value: u8);
     fn mirroring(&self) -> Mirroring;
+    fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])>;
+    fn read_chr(&self, address: u16) -> u8;
+    fn has_chr_rom(&self) -> bool;
 }
 
 struct UNROM {
@@ -35,6 +38,18 @@ impl Cartridge for UNROM {
     fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
+
+    fn pattern_tables(&self) -> Option<(&[u8], &[u8])> {
+        None
+    }
+
+    fn read_chr(&self, address: u16) -> u8 {
+        panic!("Should not happen")
+    }
+
+    fn has_chr_rom(&self) -> bool {
+        false
+    }
 }
 
 struct NROM {
@@ -56,16 +71,36 @@ impl Cartridge for NROM {
         }
     }
 
-    fn write_address(&mut self, address: u16, value: u8) {
+    fn write_address(&mut self, _address: u16, _value: u8) {
         // No writes should happen
     }
 
     fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
+
+    fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])> {
+        if self.chr_rom.len() == 0 {
+            None
+        } else {
+            Some((&self.chr_rom[0..0x1000], &self.chr_rom[0x1000..]))
+        }
+    }
+
+    fn read_chr(&self, address: u16) -> u8 {
+        if self.has_chr_rom() {
+            self.chr_rom[address as usize]
+        } else {
+            panic!("Should not happen")
+        }
+    }
+
+    fn has_chr_rom(&self) -> bool {
+        self.chr_rom.len() != 0
+    }
 }
 
-pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Box<Cartridge>, RomParseError> {
+pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Box<dyn Cartridge>, RomParseError> {
     let bytes: Vec<u8> = std::fs::read(source.into()).unwrap().into_iter().collect();
 
     if bytes[0..4] != [0x4e, 0x45, 0x53, 0x1a] {

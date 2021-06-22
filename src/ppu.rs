@@ -1,6 +1,10 @@
-use std::ops::BitAnd;
+use std::{
+    cell::{Ref, RefCell},
+    ops::BitAnd,
+    rc::Rc,
+};
 
-use crate::log_ppu;
+use crate::{ines::Cartridge, log_ppu};
 
 use bitflags::bitflags;
 
@@ -99,6 +103,9 @@ bitflags! {
         const SHOW_BACKGROUND = 0b00001000;
         const SHOW_LEFTMOST_SPRITES = 0b00000100;
         const SHOW_LEFTMOST_BACKGROUND = 0b00000010;
+        const EMPHASIZE_RED = 0b10000000;
+        const EMPHASIZE_GREEN = 0b01000000;
+        const EMPHASIZE_BLUE = 0b00100000;
     }
 }
 
@@ -126,7 +133,6 @@ pub enum Mirroring {
     Vertical,
 }
 
-#[derive(PartialEq, Eq)]
 pub struct Ppu {
     memory: VideoMemoryBuffer,
     write_latch: WriteLatch,
@@ -149,6 +155,27 @@ pub struct Ppu {
 
     frame_buffer: [[u8; 256]; 240],
     mirroring: Mirroring,
+
+    cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
+}
+
+pub struct PatternTableRef<'a> {
+    cartridge: Ref<'a, Box<dyn Cartridge>>,
+    left_vram: &'a [u8],
+    right_vram: &'a [u8],
+}
+
+impl<'a, 'b> PatternTableRef<'a> {
+    pub fn get_tables(&'b self) -> (&'b [u8], &'b [u8])
+    where
+        'a: 'b,
+    {
+        let asd = self.cartridge.pattern_tables();
+        match asd {
+            Some(tables) => tables,
+            None => (self.left_vram, self.right_vram),
+        }
+    }
 }
 
 pub struct ColorPalette {
@@ -172,7 +199,11 @@ fn map_mirror(address: u16) -> u16 {
 }
 
 impl Ppu {
-    pub fn new(memory: VideoMemoryBuffer, mirroring: Mirroring) -> Ppu {
+    pub fn new(
+        memory: VideoMemoryBuffer,
+        mirroring: Mirroring,
+        cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
+    ) -> Ppu {
         Ppu {
             memory,
             write_latch: WriteLatch::Zero,
@@ -195,6 +226,7 @@ impl Ppu {
             current_dot: 0,
             current_fine_x: 0,
             mirroring,
+            cartridge,
         }
     }
 
@@ -282,8 +314,14 @@ impl Ppu {
 
             value
         } else {
-            self.read_buffer = self.memory[real_address as usize];
+            let cartridge = self.cartridge.borrow();
+            let value = if cartridge.has_chr_rom() && real_address < 0x2000 {
+                cartridge.read_chr(real_address)
+            } else {
+                self.memory[real_address as usize]
+            };
 
+            self.read_buffer = value;
             self.v = self.v.wrapping_add(self.control.address_increment());
 
             last_buffer
@@ -435,12 +473,12 @@ impl Ppu {
         &self.memory
     }
 
-    pub fn left_pattern_table(&self) -> &[u8] {
-        &self.memory[0..0x1000]
-    }
-
-    pub fn right_pattern_table(&self) -> &[u8] {
-        &self.memory[0x1000..0x2000]
+    pub fn pattern_tables(&self) -> PatternTableRef {
+        PatternTableRef {
+            cartridge: self.cartridge.borrow(),
+            left_vram: &self.memory[0..0x1000],
+            right_vram: &self.memory[0x1000..0x2000],
+        }
     }
 
     pub fn current_background_pattern_table(&self) -> PatternTableSelection {
@@ -552,13 +590,19 @@ impl Ppu {
 
                     let pattern_address = tile_value as u16 * 0x10 + fine_y;
 
-                    let pattern_table = match self.current_background_pattern_table() {
-                        PatternTableSelection::Left => self.left_pattern_table(),
-                        PatternTableSelection::Right => self.right_pattern_table(),
-                    };
+                    let pattern1: u8;
+                    let pattern2: u8;
 
-                    let pattern1 = pattern_table[pattern_address as usize];
-                    let pattern2 = pattern_table[pattern_address as usize + 8];
+                    {
+                        let tables = self.pattern_tables();
+                        let (left_pattern_table, right_pattern_table) = tables.get_tables();
+                        let pattern_table = match self.current_background_pattern_table() {
+                            PatternTableSelection::Left => left_pattern_table,
+                            PatternTableSelection::Right => right_pattern_table,
+                        };
+                        pattern1 = pattern_table[pattern_address as usize];
+                        pattern2 = pattern_table[pattern_address as usize + 8];
+                    }
 
                     let shift = 7 - self.current_fine_x;
 
@@ -690,15 +734,21 @@ impl Ppu {
                 }
             }
 
-            let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
-                self.right_pattern_table()
-            } else {
-                self.left_pattern_table()
-            };
-
             let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
-            let left_tile = pattern_table[pattern_row];
-            let right_tile = pattern_table[pattern_row + 8];
+            let left_tile: u8;
+            let right_tile: u8;
+
+            {
+                let table = self.pattern_tables();
+                let (left_pattern_table, right_pattern_table) = table.get_tables();
+                let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
+                    right_pattern_table
+                } else {
+                    left_pattern_table
+                };
+                left_tile = pattern_table[pattern_row];
+                right_tile = pattern_table[pattern_row + 8];
+            }
 
             let include_leftmost_tile = self
                 .mask
