@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashSet, convert::TryInto, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use crate::{
     ines::Cartridge,
@@ -37,7 +37,7 @@ pub struct RealBus {
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
     pub ppu: Ppu,
-    pub cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
+    pub cartridge: Rc<RefCell<Cartridge>>,
 }
 
 fn unmirror(address: u16) -> u16 {

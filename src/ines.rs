@@ -1,106 +1,116 @@
-use crate::{ppu::Mirroring, utils::hex_string};
+use crate::ppu::Mirroring;
 
-pub trait Cartridge {
-    fn read_address(&mut self, address: u16) -> u8;
-    fn write_address(&mut self, address: u16, value: u8);
-    fn mirroring(&self) -> Mirroring;
-    fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])>;
-    fn read_chr(&self, address: u16) -> u8;
-    fn has_chr_rom(&self) -> bool;
+pub trait Mapper {
+    fn write_address(&mut self, prg_rom: &[u8], address: u16, value: u8);
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
+    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
+    fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
+}
+
+struct NROM;
+
+impl Mapper for NROM {
+    fn write_address(&mut self, _prg_rom: &[u8], _address: u16, _value: u8) {
+        // ignore
+    }
+
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        if prg_rom.len() / 16384 == 2 {
+            return prg_rom[address as usize - 0x8000];
+        }
+
+        match address {
+            0x8000..=0xbfff => prg_rom[address as usize - 0x8000],
+            0xc000..=0xffff => prg_rom[address as usize - 0xc000],
+            _ => panic!("Unhandled address: {:#06X}", address),
+        }
+    }
+
+    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
+        if chr_rom.len() == 0 {
+            None
+        } else {
+            Some((&chr_rom[0..0x1000], &chr_rom[0x1000..]))
+        }
+    }
+
+    fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
+        if chr_rom.len() != 0 {
+            Some(chr_rom[address as usize])
+        } else {
+            None
+        }
+    }
 }
 
 struct UNROM {
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
-    mirroring: Mirroring,
     current_bank: u8,
 }
 
-impl Cartridge for UNROM {
-    fn read_address(&mut self, address: u16) -> u8 {
-        let bank_size = self.prg_rom.len() / 16384;
+impl UNROM {
+    fn new() -> UNROM {
+        UNROM { current_bank: 0 }
+    }
+}
+
+impl Mapper for UNROM {
+    fn write_address(&mut self, _prg_rom: &[u8], _address: u16, value: u8) {
+        let value = value & 0b111;
+        self.current_bank = value;
+    }
+
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        let bank_size = prg_rom.len() / 16384;
 
         match address {
             0x8000..=0xbfff => {
-                self.prg_rom[address as usize - 0x8000 + self.current_bank as usize * 16384]
+                prg_rom[address as usize - 0x8000 + self.current_bank as usize * 16384]
             }
-            0xc000..=0xffff => self.prg_rom[address as usize - 0xc000 + (bank_size - 1) * 16384],
+            0xc000..=0xffff => prg_rom[address as usize - 0xc000 + (bank_size - 1) * 16384],
             // 0xc000..=0xffff => self.prg_rom[address as usize],
             _ => panic!("Unimplemented address read: {:#06X}", address),
         }
     }
 
-    fn write_address(&mut self, address: u16, value: u8) {
-        let value = value & 0b111;
-        self.current_bank = value
-    }
-
-    fn mirroring(&self) -> Mirroring {
-        self.mirroring
-    }
-
-    fn pattern_tables(&self) -> Option<(&[u8], &[u8])> {
+    fn pattern_tables<'a>(&self, _chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
         None
     }
 
-    fn read_chr(&self, address: u16) -> u8 {
-        panic!("Should not happen")
-    }
-
-    fn has_chr_rom(&self) -> bool {
-        false
+    fn read_chr_rom(&self, _chr_rom: &[u8], _address: u16) -> Option<u8> {
+        None
     }
 }
 
-struct NROM {
+pub struct Cartridge {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
     mirroring: Mirroring,
+    mapper: Box<dyn Mapper>,
 }
 
-impl Cartridge for NROM {
-    fn read_address(&mut self, address: u16) -> u8 {
-        if self.prg_rom.len() / 16384 == 2 {
-            return self.prg_rom[address as usize - 0x8000];
-        }
-
-        match address {
-            0x8000..=0xbfff => self.prg_rom[address as usize - 0x8000],
-            0xc000..=0xffff => self.prg_rom[address as usize - 0xc000],
-            _ => panic!("Unhandled address: {:#06X}", address),
-        }
+impl Cartridge {
+    pub fn write_address(&mut self, address: u16, value: u8) {
+        self.mapper.write_address(&self.prg_rom, address, value)
     }
 
-    fn write_address(&mut self, _address: u16, _value: u8) {
-        // No writes should happen
+    pub fn read_address(&mut self, address: u16) -> u8 {
+        self.mapper.read_address(&self.prg_rom, address)
     }
 
-    fn mirroring(&self) -> Mirroring {
+    pub fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])> {
+        self.mapper.pattern_tables(&self.chr_rom)
+    }
+
+    pub fn read_chr_rom(&self, address: u16) -> Option<u8> {
+        self.mapper.read_chr_rom(&self.chr_rom, address)
+    }
+
+    pub fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
-
-    fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])> {
-        if self.chr_rom.len() == 0 {
-            None
-        } else {
-            Some((&self.chr_rom[0..0x1000], &self.chr_rom[0x1000..]))
-        }
-    }
-
-    fn read_chr(&self, address: u16) -> u8 {
-        if self.has_chr_rom() {
-            self.chr_rom[address as usize]
-        } else {
-            panic!("Should not happen")
-        }
-    }
-
-    fn has_chr_rom(&self) -> bool {
-        self.chr_rom.len() != 0
-    }
 }
 
-pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Box<dyn Cartridge>, RomParseError> {
+pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Cartridge, RomParseError> {
     let bytes: Vec<u8> = std::fs::read(source.into()).unwrap().into_iter().collect();
 
     if bytes[0..4] != [0x4e, 0x45, 0x53, 0x1a] {
@@ -132,20 +142,18 @@ pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Box<dyn Cartridge>, 
         Mirroring::Vertical
     };
 
-    if bytes[6] >> 4 != 0 {
-        return Ok(Box::new(UNROM {
-            prg_rom,
-            chr_rom,
-            mirroring,
-            current_bank: 0,
-        }));
+    let mapper: Box<dyn Mapper> = if bytes[6] >> 4 != 0 {
+        Box::new(UNROM::new())
     } else {
-        return Ok(Box::new(NROM {
-            prg_rom,
-            chr_rom,
-            mirroring,
-        }));
-    }
+        Box::new(NROM {})
+    };
+
+    Ok(Cartridge {
+        prg_rom,
+        chr_rom,
+        mirroring,
+        mapper,
+    })
 }
 
 pub enum RomParseError {

@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc, u8};
 
+use crate::ppu::VideoMemoryBuffer;
 use crate::{
     bus::{JoypadButton, JoypadState, MemoryBuffer, RealBus},
     cpu::Cpu,
@@ -7,7 +8,6 @@ use crate::{
     log_ppu,
     ppu::Ppu,
 };
-use crate::{ines::InesRom, ppu::VideoMemoryBuffer};
 
 pub enum SideEffect {
     Render,

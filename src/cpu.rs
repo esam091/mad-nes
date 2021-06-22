@@ -2,7 +2,6 @@ use std::ops::{BitAnd, BitOr};
 
 use crate::{
     bus::{BusTrait, MemoryBuffer, RealBus},
-    ines::InesRom,
     instruction::Instruction,
 };
 
@@ -1880,24 +1879,26 @@ impl Iterator for Cpu {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
     use super::*;
-    use crate::{bus::JoypadState, ines::InesRom, ppu::Ppu};
+    use crate::{bus::JoypadState, ines::load_cartridge, ppu::Ppu};
 
     #[test]
     fn nestest() {
         let text = std::fs::read_to_string("nestest.log").unwrap();
         let lines = text.lines();
 
+        let cartridge = Rc::new(RefCell::new(load_cartridge("nestest.nes").ok().unwrap()));
         let bus = RealBus {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new([0; 0x4000], crate::ppu::Mirroring::Horizontal),
+            ppu: Ppu::new(crate::ppu::Mirroring::Horizontal, cartridge.clone()),
+            cartridge,
         };
         let mut cycles = 7;
-        let mut cpu = Cpu::load(&InesRom::load("nestest.nes").ok().unwrap(), bus);
+        let mut cpu = Cpu::load(bus);
 
         // starting point according to the nestest guide
         cpu.pc = 0xc000;

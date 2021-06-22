@@ -156,11 +156,11 @@ pub struct Ppu {
     frame_buffer: [[u8; 256]; 240],
     mirroring: Mirroring,
 
-    cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
+    cartridge: Rc<RefCell<Cartridge>>,
 }
 
 pub struct PatternTableRef<'a> {
-    cartridge: Ref<'a, Box<dyn Cartridge>>,
+    cartridge: Ref<'a, Cartridge>,
     left_vram: &'a [u8],
     right_vram: &'a [u8],
 }
@@ -199,7 +199,7 @@ fn map_mirror(address: u16) -> u16 {
 }
 
 impl Ppu {
-    pub fn new(mirroring: Mirroring, cartridge: Rc<RefCell<Box<dyn Cartridge>>>) -> Ppu {
+    pub fn new(mirroring: Mirroring, cartridge: Rc<RefCell<Cartridge>>) -> Ppu {
         Ppu {
             memory: [0; 0x4000],
             write_latch: WriteLatch::Zero,
@@ -311,8 +311,10 @@ impl Ppu {
             value
         } else {
             let cartridge = self.cartridge.borrow();
-            let value = if cartridge.has_chr_rom() && real_address < 0x2000 {
-                cartridge.read_chr(real_address)
+            let value = if real_address < 0x2000 {
+                cartridge
+                    .read_chr_rom(real_address)
+                    .unwrap_or(self.memory[real_address as usize])
             } else {
                 self.memory[real_address as usize]
             };
