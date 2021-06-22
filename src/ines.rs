@@ -28,7 +28,7 @@ impl Cartridge for UNROM {
     }
 
     fn write_address(&mut self, address: u16, value: u8) {
-        // dbg!(value, hex_string(address));
+        let value = value & 0b111;
         self.current_bank = value
     }
 
