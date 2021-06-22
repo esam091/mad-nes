@@ -30,7 +30,7 @@ impl Machine {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new([0; 0x4000], mirroring, cartridge.clone()),
+            ppu: Ppu::new(mirroring, cartridge.clone()),
             cartridge,
         };
 

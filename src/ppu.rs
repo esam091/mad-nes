@@ -199,13 +199,9 @@ fn map_mirror(address: u16) -> u16 {
 }
 
 impl Ppu {
-    pub fn new(
-        memory: VideoMemoryBuffer,
-        mirroring: Mirroring,
-        cartridge: Rc<RefCell<Box<dyn Cartridge>>>,
-    ) -> Ppu {
+    pub fn new(mirroring: Mirroring, cartridge: Rc<RefCell<Box<dyn Cartridge>>>) -> Ppu {
         Ppu {
-            memory,
+            memory: [0; 0x4000],
             write_latch: WriteLatch::Zero,
             current_oam_address: 0,
             oam_data: [0; 256],
