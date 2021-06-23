@@ -83,7 +83,7 @@ impl Cpu {
             })
             .unwrap();
 
-        println!("{:#04X?}", instruction);
+        // println!("{:#04X?}", instruction);
 
         match instruction {
             Instruction::AndImmediate(value) => {
@@ -836,6 +836,7 @@ impl Cpu {
 
             Instruction::Brk => {
                 self.set_break_flag(true);
+                // self.pc = self.irq_vector;
                 cycles(7)
             }
 

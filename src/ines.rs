@@ -35,6 +35,11 @@ impl SNROM {
 
 impl Mapper for SNROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
+        if address < 0x8000 {
+            // TODO: handle PRG RAM writes
+            return;
+        }
+
         println!("Write MMC1: {:#010b} at {:#06X}", value, address);
         if value & 0x80 != 0 {
             self.shift_register = 0b10000;
@@ -50,10 +55,16 @@ impl Mapper for SNROM {
             self.shift_register = 0b10000;
 
             match address {
+                0x6000..=0x7fff => {} //TODO
                 0x8000..=0x9fff => self.control = value,
                 0xa000..=0xbfff => self.chr_bank_0 = value,
                 0xc000..=0xdfff => self.chr_bank_1 = value,
-                0xe000..=0xffff => self.prg_bank = value,
+                0xe000..=0xffff => {
+                    self.prg_bank = value & 0b1111;
+                    if (self.control & 0b1100) >> 2 <= 1 {
+                        self.prg_bank &= !1;
+                    }
+                }
                 _ => panic!("Unhandled address: {:#06X}", address),
             }
         }
@@ -65,7 +76,7 @@ impl Mapper for SNROM {
         //     3: fix last bank at $C000 and switch 16 KB bank at $8000)
         let bank_size = prg_bank_size(prg_rom);
 
-        match (self.control & 0b11) >> 2 {
+        match (self.control & 0b1100) >> 2 {
             0 | 1 => prg_rom[address as usize - 0x8000],
             3 => match address {
                 0x8000..=0xbfff => {
@@ -85,7 +96,7 @@ impl Mapper for SNROM {
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
-        todo!()
+        None
     }
 }
 
