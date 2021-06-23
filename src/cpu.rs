@@ -1501,16 +1501,7 @@ impl Cpu {
         let value = self.bus.read_address(address).overflowing_add(1).0;
         let side_effect = self.set_memory_value(address, value);
 
-        let (result, sub_overflow) = self
-            .a
-            .overflowing_sub(value + !self.is_carry_flag_on() as u8); // should account for overflow?
-
-        self.toggle_zero_negative_flag(result);
-        self.set_carry_flag(!sub_overflow);
-        self.set_overflow_flag((self.a as i8).overflowing_sub(value as i8).1);
-
-        self.a = result;
-
+        self.sbc(value);
         side_effect
     }
 
