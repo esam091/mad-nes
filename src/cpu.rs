@@ -83,7 +83,7 @@ impl Cpu {
             })
             .unwrap();
 
-        // println!("{:#04X?}", instruction);
+        println!("{:#04X?}", instruction);
 
         match instruction {
             Instruction::AndImmediate(value) => {

@@ -1,10 +1,92 @@
+use std::ops::{Shl, Shr};
+
 use crate::ppu::Mirroring;
+
+fn prg_bank_size(bytes: &[u8]) -> usize {
+    bytes.len() / 0x4000
+}
 
 pub trait Mapper {
     fn write_address(&mut self, prg_rom: &[u8], address: u16, value: u8);
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
     fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
+}
+
+struct SNROM {
+    shift_register: u8,
+    control: u8,
+    chr_bank_0: u8,
+    chr_bank_1: u8,
+    prg_bank: u8,
+}
+
+impl SNROM {
+    fn new() -> SNROM {
+        SNROM {
+            shift_register: 0b10000,
+            control: 0,
+            chr_bank_0: 0,
+            chr_bank_1: 0,
+            prg_bank: 0,
+        }
+    }
+}
+
+impl Mapper for SNROM {
+    fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
+        println!("Write MMC1: {:#010b} at {:#06X}", value, address);
+        if value & 0x80 != 0 {
+            self.shift_register = 0b10000;
+            return;
+        }
+
+        let value = self.shift_register.shr(1) | (value & 1).shl(4);
+        if self.shift_register & 1 == 0 {
+            self.shift_register = value;
+        } else {
+            println!("MMC1 value: {:#07b}, at: {:#06X}", value, address);
+
+            self.shift_register = 0b10000;
+
+            match address {
+                0x8000..=0x9fff => self.control = value,
+                0xa000..=0xbfff => self.chr_bank_0 = value,
+                0xc000..=0xdfff => self.chr_bank_1 = value,
+                0xe000..=0xffff => self.prg_bank = value,
+                _ => panic!("Unhandled address: {:#06X}", address),
+            }
+        }
+    }
+
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        // (0, 1: switch 32 KB at $8000, ignoring low bit of bank number;
+        //     2: fix first bank at $8000 and switch 16 KB bank at $C000;
+        //     3: fix last bank at $C000 and switch 16 KB bank at $8000)
+        let bank_size = prg_bank_size(prg_rom);
+
+        match (self.control & 0b11) >> 2 {
+            0 | 1 => prg_rom[address as usize - 0x8000],
+            3 => match address {
+                0x8000..=0xbfff => {
+                    prg_rom[address as usize - 0x8000 + self.prg_bank as usize * 0x4000]
+                }
+                0xc000..=0xffff => prg_rom[address as usize - 0xc000 + (bank_size - 1) * 0x4000],
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
+            _ => todo!("prg read control"),
+        }
+    }
+
+    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
+        // todo!()
+        // dbg!(chr_rom.len());
+        None
+    }
+
+    fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
+        todo!()
+    }
 }
 
 struct NROM;
@@ -142,10 +224,12 @@ pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Cartridge, RomParseE
         Mirroring::Vertical
     };
 
-    let mapper: Box<dyn Mapper> = if bytes[6] >> 4 != 0 {
-        Box::new(UNROM::new())
-    } else {
-        Box::new(NROM {})
+    let mapper_number = bytes[6] >> 4;
+    let mapper: Box<dyn Mapper> = match bytes[6] >> 4 {
+        0 => Box::new(NROM {}),
+        1 => Box::new(SNROM::new()),
+        2 => Box::new(UNROM::new()),
+        _ => return Err(RomParseError::UnsupportedMapper(mapper_number)),
     };
 
     Ok(Cartridge {
@@ -160,4 +244,5 @@ pub enum RomParseError {
     NotInes,
     PrgRomTooSmall,
     ChrRomTooSmall,
+    UnsupportedMapper(u8),
 }
