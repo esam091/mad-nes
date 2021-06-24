@@ -670,7 +670,7 @@ impl Ppu {
             _ => {}
         }
 
-        if self.current_dot == 341 {
+        if self.current_dot == 340 {
             self.current_scanline = (self.current_scanline + 1) % 262;
             self.current_dot = 0;
         } else {
