@@ -27,20 +27,20 @@ struct PulseWave {
     volume: u8,
 }
 
-struct PulseHandler2 {
+struct PulseHandler {
     elapsed_time: f32,
     device_frequency: i32,
     wave: Option<PulseWave>,
 }
 
-impl PulseHandler2 {
+impl PulseHandler {
     fn set_wave(&mut self, wave: PulseWave) {
         self.wave = Some(wave);
         self.elapsed_time = 0.0;
     }
 }
 
-impl AudioCallback for PulseHandler2 {
+impl AudioCallback for PulseHandler {
     type Channel = f32;
 
     fn callback(&mut self, out: &mut [Self::Channel]) {
@@ -72,42 +72,11 @@ impl AudioCallback for PulseHandler2 {
     }
 }
 
-struct PulseHandler {
-    frequency: f32,
-    device_frequency: i32,
-    phase: f32,
-}
-
-impl PulseHandler {
-    fn set_frequency(&mut self, frequency: f32) {
-        self.frequency = frequency;
-        self.phase = 0.0;
-    }
-}
-
-impl AudioCallback for PulseHandler {
-    type Channel = f32;
-
-    fn callback(&mut self, out: &mut [Self::Channel]) {
-        let step = self.frequency / self.device_frequency as f32;
-
-        for x in out {
-            *x = if self.phase <= 0.5 {
-                0.1
-            } else {
-                -0.1
-                // 0.0
-            };
-
-            self.phase = (self.phase + step) % 1.0;
-        }
-    }
-}
-
 pub struct Apu {
-    square: AudioDevice<PulseHandler2>,
+    square: AudioDevice<PulseHandler>,
     pulse2_low_timer: u8,
     pulse2_length_and_high_timer: u8,
+    pulse2_setting: u8,
 }
 
 impl Apu {
@@ -118,7 +87,7 @@ impl Apu {
             samples: None,     // default sample size
         };
         let square = audio_subsystem
-            .open_playback(None, &desired_spec, |spec| PulseHandler2 {
+            .open_playback(None, &desired_spec, |spec| PulseHandler {
                 device_frequency: spec.freq,
                 elapsed_time: 0.0,
                 wave: None,
@@ -130,6 +99,7 @@ impl Apu {
             square,
             pulse2_length_and_high_timer: 0,
             pulse2_low_timer: 0,
+            pulse2_setting: 0,
         }
     }
 
@@ -149,7 +119,7 @@ impl Apu {
             frequency,
             is_constant: false,
             loops_playback: false,
-            volume: 15,
+            volume: self.pulse2_setting & 0b1111,
         };
 
         self.square.lock().set_wave(wave);
@@ -165,5 +135,6 @@ impl Apu {
 
     pub fn write_pulse2_setting(&mut self, value: u8) {
         log_apu!("Write $4004: {:#010b}", value);
+        self.pulse2_setting = value;
     }
 }
