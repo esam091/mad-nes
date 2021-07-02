@@ -1,6 +1,8 @@
+use chrono::Local;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use crate::{
+    apu::Apu,
     ines::Cartridge,
     log_ppu,
     ppu::{Ppu, PpuControl, PpuMask},
@@ -37,6 +39,7 @@ pub struct RealBus {
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
     pub ppu: Ppu,
+    pub apu: Apu,
     pub cartridge: Rc<RefCell<Cartridge>>,
 }
 
@@ -57,6 +60,11 @@ impl BusTrait for RealBus {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
+            // 0x4017 => { this is used for controller 2 if i'm not mistaken
+            //     println!("APU Read {:#06X}", address);
+            //     self.memory[address as usize]
+            // }
+            0x4015 => self.apu.read_status(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
@@ -108,6 +116,22 @@ impl BusTrait for RealBus {
             0x2007 => self.ppu.write_data(value),
             0x2003 => self.ppu.set_oam_address(value),
             0x2004 => self.ppu.write_oam_data(value),
+            0x4000 => self.apu.write_pulse1_envelope(value),
+            0x4001 => self.apu.write_pulse1_sweep(value),
+            0x4002 => self.apu.write_pulse1_timer_low(value),
+            0x4003 => self.apu.write_pulse1_length_and_timer(value),
+            0x4004 => self.apu.write_pulse2_envelope(value),
+            0x4005 => self.apu.write_pulse2_sweep(value),
+            0x4006 => self.apu.write_pulse2_timer_low(value),
+            0x4007 => self.apu.write_pulse2_length_and_timer(value),
+            0x4008 => self.apu.write_triangle_linear_counter(value),
+            0x400a => self.apu.write_triangle_timer_low(value),
+            0x400b => self.apu.write_triangle_length_and_timer(value),
+            0x400c => self.apu.write_noise_envelope(value),
+            0x400e => self.apu.write_noise_mode_and_period(value),
+            0x400f => self.apu.write_noise_length_counter(value),
+            0x4015 => self.apu.write_status(value),
+            0x4017 => self.apu.write_frame_counter(value),
             0x4014 => {
                 log_ppu!("Write $4014: {:#04X}", value);
                 let starting_address = value as usize * 0x100;
