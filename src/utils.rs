@@ -17,3 +17,11 @@ macro_rules! log_ppu {
         println!($($arg)*);
     })
 }
+
+#[macro_export]
+macro_rules! log_apu {
+    ($($arg:tt)*) => ({
+        #[cfg(feature = "log_apu")]
+        println!($($arg)*);
+    })
+}

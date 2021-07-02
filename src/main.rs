@@ -5,6 +5,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+mod apu;
 mod bus;
 mod cpu;
 mod ines;
@@ -15,6 +16,7 @@ mod ppu_debugger;
 mod render;
 mod utils;
 
+use apu::Apu;
 use bus::{JoypadButton, MemoryBuffer};
 use machine::Machine;
 use ppu::VideoMemoryBuffer;
@@ -116,7 +118,6 @@ const SCALE: u32 = 2;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
-    let mut machine = Machine::load(&args[1]).unwrap();
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -151,6 +152,8 @@ fn main() -> Result<(), String> {
 
     let debug_texture = debugger_canvas.texture_creator();
     let mut debug_renderer = PpuDebugger::new(debugger_canvas, &debug_texture);
+
+    let mut machine = Machine::load(&args[1], Apu::new(sdl_context.audio().unwrap())).unwrap();
     // let stdout = io::stdout()
     //     .into_raw_mode()
     //     .map_err(|_| "Failed retrieving stdout")?;

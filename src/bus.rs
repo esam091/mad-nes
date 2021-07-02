@@ -1,6 +1,8 @@
+use chrono::Local;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use crate::{
+    apu::Apu,
     ines::Cartridge,
     log_ppu,
     ppu::{Ppu, PpuControl, PpuMask},
@@ -37,6 +39,7 @@ pub struct RealBus {
     pub active_buttons: HashSet<JoypadButton>,
     pub joypad_state: JoypadState,
     pub ppu: Ppu,
+    pub apu: Apu,
     pub cartridge: Rc<RefCell<Cartridge>>,
 }
 
@@ -57,6 +60,10 @@ impl BusTrait for RealBus {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
+            0x4000..=0x4013 | 0x4015 | 4017 => {
+                println!("APU Read {:#06X}", address);
+                self.memory[address as usize]
+            }
             0x4016 => {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
@@ -108,6 +115,18 @@ impl BusTrait for RealBus {
             0x2007 => self.ppu.write_data(value),
             0x2003 => self.ppu.set_oam_address(value),
             0x2004 => self.ppu.write_oam_data(value),
+            0x4004 => self.apu.write_pulse2_setting(value),
+            0x4005 => self.apu.write_pulse2_sweep(value),
+            0x4006 => self.apu.write_pulse2_timer_low(value),
+            0x4007 => self.apu.write_pulse2_length_and_timer(value),
+            0x4000..=0x4013 | 0x4015 | 4017 => {
+                println!(
+                    "APU Write {:#06X} = {:#04X} at {:?}",
+                    address,
+                    value,
+                    Local::now()
+                );
+            }
             0x4014 => {
                 log_ppu!("Write $4014: {:#04X}", value);
                 let starting_address = value as usize * 0x100;
