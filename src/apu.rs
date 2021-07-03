@@ -27,18 +27,56 @@ struct PulseWave {
     volume: u8,
 }
 
+struct Sweep {
+    enabled: bool,
+    period: u8,
+    shift: u8,
+    negate: bool,
+}
+
+impl Sweep {
+    fn new() -> Sweep {
+        Sweep {
+            enabled: false,
+            period: 0,
+            shift: 0,
+            negate: false,
+        }
+    }
+
+    fn from_flags(flag: u8) -> Sweep {
+        let enabled = flag & 0x80 != 0;
+        let shift = flag & 0b111;
+        let negate = flag & 0b1000 != 0;
+        let period = flag.bitand(0b01110000).shr(4);
+
+        Sweep {
+            enabled,
+            shift,
+            negate,
+            period,
+        }
+    }
+}
+
 struct PulseHandler {
     elapsed_time: f32,
     device_frequency: i32,
     wave: Option<PulseWave>,
     volume: u8,
     duty: u8,
+    sweep: Sweep,
+    timer: u16,
 }
 
 impl PulseHandler {
     fn set_wave(&mut self, wave: PulseWave) {
         self.wave = Some(wave);
         self.elapsed_time = 0.0;
+    }
+
+    fn set_sweep(&mut self, sweep: Sweep) {
+        self.sweep = sweep;
     }
 }
 
@@ -50,7 +88,7 @@ impl AudioCallback for PulseHandler {
             let time_interval = 1.0 / self.device_frequency as f32;
             let decay_frequency = 240.0 / (self.volume as f32 + 1.0);
             let decay_period = 1.0 / decay_frequency;
-            let wave_period = 1.0 / wave.frequency;
+            let wave_period = 1.0 / note_frequency_from_period(self.timer);
             // dbg!(wave_period, wave.frequency);
 
             for x in out {
@@ -116,6 +154,10 @@ pub struct Apu {
     pulse1_setting: u8,
 }
 
+fn note_frequency_from_period(period: u16) -> f32 {
+    1789773.0 / (16.0 * (period + 1u16) as f32)
+}
+
 impl Apu {
     pub fn new(audio_subsystem: AudioSubsystem) -> Apu {
         let desired_spec = AudioSpecDesired {
@@ -130,6 +172,8 @@ impl Apu {
                 wave: None,
                 volume: 0,
                 duty: 0,
+                sweep: Sweep::new(),
+                timer: 0,
             })
             .unwrap();
 
@@ -140,6 +184,8 @@ impl Apu {
                 wave: None,
                 volume: 0,
                 duty: 0,
+                sweep: Sweep::new(),
+                timer: 0,
             })
             .unwrap();
 
@@ -176,10 +222,17 @@ impl Apu {
             volume: self.pulse1_setting & 0b1111,
         };
 
-        self.pulse1_device.lock().set_wave(wave);
+        let mut device = self.pulse1_device.lock();
+        device.set_wave(wave);
+        device.timer = note;
     }
 
-    pub fn write_pulse1_sweep(&mut self, value: u8) {}
+    pub fn write_pulse1_sweep(&mut self, value: u8) {
+        log_apu!("Write $4001: {:#04X}", value);
+        self.pulse1_device
+            .lock()
+            .set_sweep(Sweep::from_flags(value));
+    }
 
     pub fn write_pulse1_timer_low(&mut self, value: u8) {
         log_apu!("Write $4002: {:#04X}", value);
@@ -215,10 +268,17 @@ impl Apu {
             volume: self.pulse2_setting & 0b1111,
         };
 
-        self.pulse2_device.lock().set_wave(wave);
+        let mut device = self.pulse2_device.lock();
+        device.set_wave(wave);
+        device.timer = note;
     }
 
-    pub fn write_pulse2_sweep(&mut self, value: u8) {}
+    pub fn write_pulse2_sweep(&mut self, value: u8) {
+        log_apu!("write $4005: {:#04X}", value);
+        self.pulse2_device
+            .lock()
+            .set_sweep(Sweep::from_flags(value));
+    }
 
     pub fn write_pulse2_timer_low(&mut self, value: u8) {
         log_apu!("Write $4006: {:#04X}", value);
