@@ -81,13 +81,8 @@ impl Sweep {
         }
     }
 
-    fn new_value(&self, timer: u16, elapsed_time: f32) -> u16 {
-        // return timer;
-        let sweep_time = 120.0 / (self.period as f32 + 1.0);
-        if !self.enabled && elapsed_time < sweep_time {
-            return timer;
-        }
-
+    fn new_value(&self, timer: u16) -> u16 {
+        return timer;
         let add = timer >> self.shift;
         if self.negate {
             timer - add - 1
@@ -99,6 +94,8 @@ impl Sweep {
 
 struct PulseHandler {
     elapsed_time: f32,
+    volume_set_time: f32,
+    sweep_set_time: f32,
     device_frequency: i32,
     sweep: Sweep,
     timer: u16,
@@ -109,14 +106,18 @@ struct PulseHandler {
 impl PulseHandler {
     fn set_sweep(&mut self, sweep: Sweep) {
         self.sweep = sweep;
+        self.sweep_set_time = self.elapsed_time;
     }
 
     fn set_envelope(&mut self, envelope: PulseEnvelope) {
-        self.envelope = envelope
+        self.envelope = envelope;
+        self.volume_set_time = self.elapsed_time;
     }
 
     fn set_timer_and_length_index(&mut self, timer: u16, length_index: u8) {
         self.elapsed_time = 0.0;
+        self.volume_set_time = 0.0;
+        self.sweep_set_time = 0.0;
         self.timer = timer;
         self.length = LENGTH_VALUES[length_index as usize];
     }
@@ -126,12 +127,14 @@ impl AudioCallback for PulseHandler {
     type Channel = f32;
 
     fn callback(&mut self, out: &mut [Self::Channel]) {
-        if self.timer > 8 {
+        if self.timer >= 8 {
             let time_interval = 1.0 / self.device_frequency as f32;
             let decay_frequency = 240.0 / (self.envelope.volume as f32 + 1.0);
             let decay_period = 1.0 / decay_frequency;
             let wave_period = 1.0 / note_frequency_from_period(self.timer);
             let note_length = self.length as f32 / 120.0;
+            let sweep_frequency = 120.0 / (self.sweep.period as f32 + 1.0);
+            let sweep_period = 1.0 / sweep_frequency;
             // dbg!(wave_period, wave.frequency);
 
             for x in out {
@@ -143,7 +146,17 @@ impl AudioCallback for PulseHandler {
 
                 // TODO: handle loop mode
 
-                let sweeped_timer = self.sweep.new_value(self.timer, self.elapsed_time);
+                let mut sweeped_timer = self.timer;
+                if self.sweep.enabled
+                    && (self.elapsed_time - self.sweep_set_time > sweep_period)
+                    && self.timer >= 8
+                    && self.timer <= 0x7ff
+                {
+                    sweeped_timer = self.sweep.new_value(self.timer);
+                    self.sweep_set_time = self.elapsed_time;
+                }
+
+                self.timer = sweeped_timer;
                 let sweep_period = 1.0 / note_frequency_from_period(sweeped_timer);
                 let phase = (self.elapsed_time % sweep_period) / sweep_period;
                 // dbg!(phase, self.elapsed_time);
@@ -180,9 +193,14 @@ impl AudioCallback for PulseHandler {
                     _ => panic!("Unhandled duty: {}", self.envelope.duty),
                 };
 
+                if sweeped_timer > 0x7ff || sweeped_timer < 8 {
+                    volume = 0.0;
+                }
+
                 if !self.envelope.constant_volume {
-                    let current_decay =
-                        (15.0 - (self.elapsed_time / decay_period).floor()).max(0.0);
+                    let current_decay = (15.0
+                        - ((self.elapsed_time - self.volume_set_time) / decay_period).floor())
+                    .max(0.0);
 
                     volume *= current_decay / 15.0;
                 } else {
@@ -232,6 +250,8 @@ impl Apu {
                 timer: 0,
                 envelope: PulseEnvelope::new(),
                 length: 10,
+                volume_set_time: 0.0,
+                sweep_set_time: 0.0,
             })
             .unwrap();
 
@@ -243,11 +263,13 @@ impl Apu {
                 timer: 0,
                 envelope: PulseEnvelope::new(),
                 length: 10,
+                volume_set_time: 0.0,
+                sweep_set_time: 0.0,
             })
             .unwrap();
 
         pulse1_device.resume();
-        pulse2_device.resume();
+        // pulse2_device.resume();
         Apu {
             pulse2_device,
             pulse1_device,
