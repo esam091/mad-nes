@@ -57,6 +57,19 @@ impl Sweep {
             period,
         }
     }
+
+    fn new_value(&self, timer: u16) -> u16 {
+        if !self.enabled {
+            return timer;
+        }
+
+        let add = timer >> self.shift;
+        if self.negate {
+            timer - add - 1
+        } else {
+            timer + add
+        }
+    }
 }
 
 struct PulseHandler {
@@ -89,10 +102,12 @@ impl AudioCallback for PulseHandler {
             let decay_frequency = 240.0 / (self.volume as f32 + 1.0);
             let decay_period = 1.0 / decay_frequency;
             let wave_period = 1.0 / note_frequency_from_period(self.timer);
+            let sweep_zz = self.sweep.new_value(self.timer);
+            let sweep_period = 1.0 / note_frequency_from_period(sweep_zz);
             // dbg!(wave_period, wave.frequency);
 
             for x in out {
-                let phase = (self.elapsed_time % wave_period) / wave_period;
+                let phase = (self.elapsed_time % sweep_period) / sweep_period;
                 // dbg!(phase, self.elapsed_time);
 
                 let mut volume = match self.duty {
