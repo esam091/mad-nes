@@ -27,6 +27,38 @@ struct PulseWave {
     volume: u8,
 }
 
+struct PulseEnvelope {
+    duty: u8,
+    volume: u8,
+    loops_playback: bool,
+    constant_volume: bool,
+}
+
+impl PulseEnvelope {
+    fn new() -> PulseEnvelope {
+        PulseEnvelope {
+            duty: 0,
+            volume: 0,
+            loops_playback: false,
+            constant_volume: false,
+        }
+    }
+
+    fn from_flags(flag: u8) -> PulseEnvelope {
+        let duty = flag.bitand(0b11000000).shr(6);
+        let loops_playback = flag.bitand(0b100000) != 0;
+        let constant_volume = flag.bitand(0b10000) != 0;
+        let volume = flag.bitand(0b1111);
+
+        PulseEnvelope {
+            duty,
+            loops_playback,
+            constant_volume,
+            volume,
+        }
+    }
+}
+
 struct Sweep {
     enabled: bool,
     period: u8,
@@ -58,8 +90,10 @@ impl Sweep {
         }
     }
 
-    fn new_value(&self, timer: u16) -> u16 {
-        if !self.enabled {
+    fn new_value(&self, timer: u16, elapsed_time: f32) -> u16 {
+        // return timer;
+        let sweep_time = 120.0 / (self.period as f32 + 1.0);
+        if !self.enabled && elapsed_time < sweep_time {
             return timer;
         }
 
@@ -76,10 +110,9 @@ struct PulseHandler {
     elapsed_time: f32,
     device_frequency: i32,
     wave: Option<PulseWave>,
-    volume: u8,
-    duty: u8,
     sweep: Sweep,
     timer: u16,
+    envelope: PulseEnvelope,
 }
 
 impl PulseHandler {
@@ -91,6 +124,10 @@ impl PulseHandler {
     fn set_sweep(&mut self, sweep: Sweep) {
         self.sweep = sweep;
     }
+
+    fn set_envelope(&mut self, envelope: PulseEnvelope) {
+        self.envelope = envelope
+    }
 }
 
 impl AudioCallback for PulseHandler {
@@ -99,18 +136,19 @@ impl AudioCallback for PulseHandler {
     fn callback(&mut self, out: &mut [Self::Channel]) {
         if let Some(wave) = &self.wave {
             let time_interval = 1.0 / self.device_frequency as f32;
-            let decay_frequency = 240.0 / (self.volume as f32 + 1.0);
+            let decay_frequency = 240.0 / (self.envelope.volume as f32 + 1.0);
             let decay_period = 1.0 / decay_frequency;
             let wave_period = 1.0 / note_frequency_from_period(self.timer);
-            let sweep_zz = self.sweep.new_value(self.timer);
-            let sweep_period = 1.0 / note_frequency_from_period(sweep_zz);
+
             // dbg!(wave_period, wave.frequency);
 
             for x in out {
+                let sweeped_timer = self.sweep.new_value(self.timer, self.elapsed_time);
+                let sweep_period = 1.0 / note_frequency_from_period(sweeped_timer);
                 let phase = (self.elapsed_time % sweep_period) / sweep_period;
                 // dbg!(phase, self.elapsed_time);
 
-                let mut volume = match self.duty {
+                let mut volume = match self.envelope.duty {
                     0 => {
                         if phase <= 0.125 {
                             0.1
@@ -139,11 +177,17 @@ impl AudioCallback for PulseHandler {
                             0.1
                         }
                     }
-                    _ => panic!("Unhandled duty: {}", self.duty),
+                    _ => panic!("Unhandled duty: {}", self.envelope.duty),
                 };
-                let current_decay = (15.0 - (self.elapsed_time / decay_period).floor()).max(0.0);
 
-                volume *= current_decay / 15.0;
+                if !self.envelope.constant_volume {
+                    let current_decay =
+                        (15.0 - (self.elapsed_time / decay_period).floor()).max(0.0);
+
+                    volume *= current_decay / 15.0;
+                } else {
+                    volume *= self.envelope.volume as f32 / 15.0;
+                }
 
                 *x = volume;
                 self.elapsed_time += time_interval;
@@ -185,10 +229,9 @@ impl Apu {
                 device_frequency: spec.freq,
                 elapsed_time: 0.0,
                 wave: None,
-                volume: 0,
-                duty: 0,
                 sweep: Sweep::new(),
                 timer: 0,
+                envelope: PulseEnvelope::new(),
             })
             .unwrap();
 
@@ -197,10 +240,9 @@ impl Apu {
                 device_frequency: spec.freq,
                 elapsed_time: 0.0,
                 wave: None,
-                volume: 0,
-                duty: 0,
                 sweep: Sweep::new(),
                 timer: 0,
+                envelope: PulseEnvelope::new(),
             })
             .unwrap();
 
@@ -260,8 +302,7 @@ impl Apu {
         self.pulse1_setting = value;
 
         let mut handler = self.pulse1_device.lock();
-        handler.volume = value & 0b1111;
-        handler.duty = value.bitand(0b11000000).shr(6);
+        handler.set_envelope(PulseEnvelope::from_flags(value));
     }
 
     pub fn write_pulse2_length_and_timer(&mut self, value: u8) {
@@ -306,7 +347,6 @@ impl Apu {
         self.pulse2_setting = value;
 
         let mut handler = self.pulse2_device.lock();
-        handler.volume = value & 0b1111;
-        handler.duty = value.bitand(0b11000000).shr(6);
+        handler.set_envelope(PulseEnvelope::from_flags(value));
     }
 }
