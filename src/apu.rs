@@ -258,6 +258,7 @@ struct TriangleChannel {
     buffer_index: usize,
 
     length: u8,
+    linear_counter: u8,
 }
 
 impl TriangleChannel {
@@ -272,6 +273,7 @@ impl TriangleChannel {
             buffer: [0.0; 2048],
             buffer_index: 0,
             length: 0,
+            linear_counter: 0,
         }
     }
 
@@ -290,7 +292,9 @@ impl TriangleChannel {
         self.length = LENGTH_VALUES[length_index as usize];
     }
 
-    fn set_linear_counter_flag(&mut self, value: u8) {}
+    fn set_linear_counter_flag(&mut self, value: u8) {
+        self.linear_counter = value.bitand(0b01111111);
+    }
 
     fn step(&mut self) {
         if self.timer == 0 {
@@ -324,7 +328,7 @@ impl TriangleChannel {
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
-        self.buffer[self.buffer_index] = if self.length == 0 {
+        self.buffer[self.buffer_index] = if self.length == 0 || self.linear_counter == 0 {
             0.0
         } else {
             0.32 * self.volume as f32 / 15.0 - 0.16
@@ -341,6 +345,10 @@ impl TriangleChannel {
     fn length_step(&mut self) {
         if self.length > 0 {
             self.length -= 1;
+        }
+
+        if self.linear_counter > 0 {
+            self.linear_counter -= 1;
         }
     }
 }
