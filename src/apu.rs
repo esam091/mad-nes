@@ -355,7 +355,9 @@ impl TriangleChannel {
         if self.length > 0 && !self.control_flag {
             self.length -= 1;
         }
+    }
 
+    fn linear_step(&mut self) {
         if self.linear_counter_reload {
             self.current_linear_counter = self.linear_counter;
         } else if self.current_linear_counter > 0 {
@@ -406,6 +408,8 @@ impl Apu {
 
     pub fn half_step(&mut self) {
         self.triangle_channel.step();
+
+        // half frame
         if self.half_cycle_count % 14913 == 0 {
             self.pulse1_channel.sweep_step();
             self.pulse1_channel.length_step();
@@ -416,9 +420,12 @@ impl Apu {
             self.triangle_channel.length_step();
         }
 
+        // quarter frame
         if self.half_cycle_count % 7547 == 0 {
             self.pulse1_channel.envelope_step();
             self.pulse2_channel.envelope_step();
+
+            self.triangle_channel.linear_step();
         }
 
         if self.half_cycle_count % 2 == 0 {
