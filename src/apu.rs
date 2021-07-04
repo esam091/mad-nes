@@ -237,6 +237,8 @@ struct PulseChannel {
     buffer_index: usize,
 }
 
+const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
+
 impl PulseChannel {
     fn new(queue: AudioQueue<f32>) -> PulseChannel {
         PulseChannel {
@@ -288,7 +290,7 @@ impl PulseChannel {
     fn fill_buffer_and_start_queue(&mut self) {
         self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff {
             0.0
-        } else if 0b01111000 & (1 << self.current_duty) != 0 {
+        } else if DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) != 0 {
             PULSE_MAX_VOLUME
         } else {
             -PULSE_MAX_VOLUME
