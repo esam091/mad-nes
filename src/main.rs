@@ -235,7 +235,7 @@ fn main() -> Result<(), String> {
             renderer.render(&machine.get_ppu());
             debug_renderer.render(&machine.get_ppu());
             let frame_duration = SystemTime::now().duration_since(frame_start).unwrap();
-            dbg!(frame_duration);
+            // dbg!(frame_duration);
 
             frame_counter += 1;
 
