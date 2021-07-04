@@ -51,6 +51,7 @@ impl Machine {
             self.pending_cycles = cycles;
         }
 
+        self.cpu.bus.apu.half_step();
         self.pending_cycles -= 1;
 
         let mut should_render = false;

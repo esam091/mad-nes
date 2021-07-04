@@ -82,7 +82,7 @@ impl Sweep {
     }
 
     fn new_value(&self, timer: u16) -> u16 {
-        return timer;
+        // return timer;
         let add = timer >> self.shift;
         if self.negate {
             timer - add - 1
@@ -122,6 +122,8 @@ impl PulseHandler {
         self.length = LENGTH_VALUES[length_index as usize];
     }
 }
+
+const PULSE_MAX_VOLUME: f32 = 0.05;
 
 impl AudioCallback for PulseHandler {
     type Channel = f32;
@@ -229,6 +231,14 @@ pub struct Apu {
     pulse1_low_timer: u8,
     pulse1_length_and_high_timer: u8,
     pulse1_setting: u8,
+
+    buffer: [f32; 2048],
+    current_index: usize,
+    pulse1_queue: AudioQueue<f32>,
+    pulse1_timer: u16,
+    pulse1_current_timer: u16,
+    half_cycle_count: usize,
+    current_duty: usize,
 }
 
 fn note_frequency_from_period(period: u16) -> f32 {
@@ -239,8 +249,8 @@ impl Apu {
     pub fn new(audio_subsystem: AudioSubsystem) -> Apu {
         let desired_spec = AudioSpecDesired {
             freq: Some(44100),
-            channels: Some(1), // mono
-            samples: None,     // default sample size
+            channels: Some(1),   // mono
+            samples: Some(2048), // default sample size
         };
         let pulse2_device = audio_subsystem
             .open_playback(None, &desired_spec, |spec| PulseHandler {
@@ -268,7 +278,11 @@ impl Apu {
             })
             .unwrap();
 
-        pulse1_device.resume();
+        let pulse1_queue: AudioQueue<f32> =
+            audio_subsystem.open_queue(None, &desired_spec).unwrap();
+
+        pulse1_queue.resume();
+        // pulse1_device.resume();
         // pulse2_device.resume();
         Apu {
             pulse2_device,
@@ -279,7 +293,47 @@ impl Apu {
             pulse1_length_and_high_timer: 0,
             pulse1_low_timer: 0,
             pulse1_setting: 0,
+            buffer: [0.0; 2048],
+            current_index: 0,
+            pulse1_queue,
+            half_cycle_count: 0,
+            pulse1_timer: 0,
+            pulse1_current_timer: 0,
+            current_duty: 0,
         }
+    }
+
+    pub fn half_step(&mut self) {
+        if self.half_cycle_count % 2 == 0 && self.pulse1_timer >= 8 {
+            // advance period
+            if self.pulse1_current_timer > 0 {
+                self.pulse1_current_timer -= 1;
+            } else {
+                self.pulse1_current_timer = self.pulse1_timer;
+                self.current_duty = (7 + self.current_duty) % 8;
+            }
+        }
+
+        if self.half_cycle_count % 40 == 0 {
+            if self.pulse1_current_timer < 8 {
+                self.buffer[self.current_index] = 0.0;
+            } else {
+                // fill buffer
+                self.buffer[self.current_index] = if 0b01111000 & (1 << self.current_duty) != 0 {
+                    PULSE_MAX_VOLUME
+                } else {
+                    -PULSE_MAX_VOLUME
+                };
+            }
+            self.current_index += 1;
+        }
+
+        if self.current_index == 2048 {
+            self.current_index = 0;
+            self.pulse1_queue.queue(&self.buffer);
+        }
+
+        self.half_cycle_count += 1;
     }
 
     pub fn write_pulse1_length_and_timer(&mut self, value: u8) {
@@ -296,6 +350,10 @@ impl Apu {
 
         let mut device = self.pulse1_device.lock();
         device.set_timer_and_length_index(note, length_index);
+
+        self.pulse1_timer = note;
+        self.pulse1_current_timer = note;
+        self.current_duty = 0;
     }
 
     pub fn write_pulse1_sweep(&mut self, value: u8) {
