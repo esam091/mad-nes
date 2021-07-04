@@ -245,9 +245,97 @@ impl PulseChannel {
     }
 }
 
+struct TriangleChannel {
+    queue: AudioQueue<f32>,
+    increment: i16,
+    timer: u16,
+    current_timer: u16,
+
+    volume: u8,
+    low_timer: u8,
+
+    buffer: [f32; 2048],
+    buffer_index: usize,
+}
+
+impl TriangleChannel {
+    fn new(queue: AudioQueue<f32>) -> TriangleChannel {
+        TriangleChannel {
+            queue,
+            increment: 0,
+            timer: 0,
+            current_timer: 0,
+            low_timer: 0,
+            volume: 0,
+            buffer: [0.0; 2048],
+            buffer_index: 0,
+        }
+    }
+
+    fn set_low_timer(&mut self, value: u8) {
+        self.low_timer = value;
+    }
+
+    fn set_length_counter_and_high_timer(&mut self, value: u8) {
+        let timer = self.low_timer as u16 | u16::from(value).bitand(0b111).shl(8);
+        self.timer = timer;
+        self.current_timer = timer;
+        self.increment = -1;
+        self.volume = 15;
+    }
+
+    fn set_linear_counter_flag(&mut self, value: u8) {}
+
+    fn step(&mut self) {
+        if self.timer == 0 {
+            return;
+        }
+
+        if self.current_timer > 0 {
+            self.current_timer -= 1;
+        } else {
+            // adjust triangle level
+            // dbg!(self.volume);
+            self.current_timer = self.timer;
+            if self.volume > 0 && self.increment < 0 {
+                self.volume -= 1;
+            } else if self.volume < 15 && self.increment > 0 {
+                self.volume += 1;
+            }
+
+            if self.volume == 0 {
+                if self.increment < 0 {
+                    self.increment = 0;
+                } else {
+                    self.increment = 1;
+                }
+            } else if self.volume == 15 {
+                if self.increment > 0 {
+                    self.increment = 0;
+                } else {
+                    self.increment = -1;
+                }
+            }
+        }
+    }
+
+    fn fill_buffer_and_start_queue(&mut self) {
+        self.buffer[self.buffer_index] = 0.32 * self.volume as f32 / 15.0 - 0.16;
+
+        // dbg!(self.buffer_index, self.buffer[self.buffer_index]);
+        self.buffer_index += 1;
+        if self.buffer_index == self.buffer.len() {
+            self.buffer_index = 0;
+            self.queue.queue(&self.buffer);
+        }
+    }
+}
+
 pub struct Apu {
     half_cycle_count: usize,
     pulse1_channel: PulseChannel,
+    pulse2_channel: PulseChannel,
+    triangle_channel: TriangleChannel,
 }
 
 impl Apu {
@@ -261,29 +349,48 @@ impl Apu {
         let pulse1_queue: AudioQueue<f32> =
             audio_subsystem.open_queue(None, &desired_spec).unwrap();
 
-        pulse1_queue.resume();
+        let pulse2_queue: AudioQueue<f32> =
+            audio_subsystem.open_queue(None, &desired_spec).unwrap();
+
+        let triangle_queue: AudioQueue<f32> =
+            audio_subsystem.open_queue(None, &desired_spec).unwrap();
+
+        // pulse1_queue.resume();
+        // pulse2_queue.resume();
+        triangle_queue.resume();
+
         Apu {
             half_cycle_count: 0,
             pulse1_channel: PulseChannel::new(pulse1_queue, PulseType::Pulse1),
+            pulse2_channel: PulseChannel::new(pulse2_queue, PulseType::Pulse2),
+            triangle_channel: TriangleChannel::new(triangle_queue),
         }
     }
 
     pub fn half_step(&mut self) {
+        self.triangle_channel.step();
         if self.half_cycle_count % 14913 == 0 {
             self.pulse1_channel.sweep_step();
             self.pulse1_channel.length_step();
+
+            self.pulse2_channel.sweep_step();
+            self.pulse2_channel.length_step();
         }
 
         if self.half_cycle_count % 7547 == 0 {
             self.pulse1_channel.envelope_step();
+            self.pulse2_channel.envelope_step();
         }
 
         if self.half_cycle_count % 2 == 0 {
             self.pulse1_channel.step();
+            self.pulse2_channel.step();
         }
 
         if self.half_cycle_count % 40 == 0 {
             self.pulse1_channel.fill_buffer_and_start_queue();
+            self.pulse2_channel.fill_buffer_and_start_queue();
+            self.triangle_channel.fill_buffer_and_start_queue();
         }
 
         self.half_cycle_count += 1;
@@ -310,7 +417,7 @@ impl Apu {
         self.pulse1_channel.set_low_timer(value);
     }
 
-    pub fn write_pulse1_setting(&mut self, value: u8) {
+    pub fn write_pulse1_envelope(&mut self, value: u8) {
         log_apu!("Write $4000: {:#010b}", value);
 
         self.pulse1_channel.set_envelope_flag(value);
@@ -322,17 +429,38 @@ impl Apu {
             value & 0b111,
             (value >> 3) & 0b11111
         );
+
+        self.pulse2_channel.set_length_counter_and_high_timer(value);
     }
 
     pub fn write_pulse2_sweep(&mut self, value: u8) {
         log_apu!("write $4005: {:#04X}", value);
+        self.pulse2_channel.set_sweep_flag(value);
     }
 
     pub fn write_pulse2_timer_low(&mut self, value: u8) {
         log_apu!("Write $4006: {:#04X}", value);
+        self.pulse2_channel.set_low_timer(value);
     }
 
-    pub fn write_pulse2_setting(&mut self, value: u8) {
+    pub fn write_pulse2_envelope(&mut self, value: u8) {
         log_apu!("Write $4004: {:#010b}", value);
+        self.pulse2_channel.set_envelope_flag(value);
+    }
+
+    pub fn write_triangle_timer_low(&mut self, value: u8) {
+        log_apu!("Write $400A: {:#04X}", value);
+        self.triangle_channel.set_low_timer(value);
+    }
+
+    pub fn write_triangle_length_and_timer(&mut self, value: u8) {
+        log_apu!("write $400B: {:#04X}", value);
+        self.triangle_channel
+            .set_length_counter_and_high_timer(value);
+    }
+
+    pub fn write_triangle_linear_counter(&mut self, value: u8) {
+        log_apu!("Write $4008: {:#04X}", value);
+        self.triangle_channel.set_linear_counter_flag(value);
     }
 }
