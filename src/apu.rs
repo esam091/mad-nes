@@ -295,13 +295,18 @@ impl PulseChannel {
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
-        // dbg!(self.current_volume);
+        let volume = if self.envelope.constant_volume {
+            PULSE_MAX_VOLUME * self.envelope.volume as f32 / 15.0
+        } else {
+            PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
+        };
+
         self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff {
             0.0
         } else if DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) != 0 {
-            PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
+            volume
         } else {
-            -PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
+            -volume
         };
 
         self.buffer_index += 1;
