@@ -258,7 +258,11 @@ struct TriangleChannel {
     buffer_index: usize,
 
     length: u8,
+    current_linear_counter: u8,
     linear_counter: u8,
+    linear_counter_reload: bool,
+
+    control_flag: bool,
 }
 
 impl TriangleChannel {
@@ -273,7 +277,10 @@ impl TriangleChannel {
             buffer: [0.0; 2048],
             buffer_index: 0,
             length: 0,
+            current_linear_counter: 0,
             linear_counter: 0,
+            linear_counter_reload: false,
+            control_flag: false,
         }
     }
 
@@ -287,6 +294,7 @@ impl TriangleChannel {
         self.current_timer = timer;
         self.increment = -1;
         self.volume = 15;
+        self.linear_counter_reload = true;
 
         let length_index = value.bitand(0b11111000).shr(3);
         self.length = LENGTH_VALUES[length_index as usize];
@@ -294,6 +302,7 @@ impl TriangleChannel {
 
     fn set_linear_counter_flag(&mut self, value: u8) {
         self.linear_counter = value.bitand(0b01111111);
+        self.control_flag = value.bitand(0x80) != 0;
     }
 
     fn step(&mut self) {
@@ -328,7 +337,7 @@ impl TriangleChannel {
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
-        self.buffer[self.buffer_index] = if self.length == 0 || self.linear_counter == 0 {
+        self.buffer[self.buffer_index] = if self.length == 0 || self.current_linear_counter == 0 {
             0.0
         } else {
             0.32 * self.volume as f32 / 15.0 - 0.16
@@ -343,12 +352,18 @@ impl TriangleChannel {
     }
 
     fn length_step(&mut self) {
-        if self.length > 0 {
+        if self.length > 0 && !self.control_flag {
             self.length -= 1;
         }
 
-        if self.linear_counter > 0 {
-            self.linear_counter -= 1;
+        if self.linear_counter_reload {
+            self.current_linear_counter = self.linear_counter;
+        } else if self.current_linear_counter > 0 {
+            self.current_linear_counter -= 1;
+        }
+
+        if !self.control_flag {
+            self.linear_counter_reload = false;
         }
     }
 }
