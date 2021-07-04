@@ -256,6 +256,8 @@ struct TriangleChannel {
 
     buffer: [f32; 2048],
     buffer_index: usize,
+
+    length: u8,
 }
 
 impl TriangleChannel {
@@ -269,6 +271,7 @@ impl TriangleChannel {
             volume: 0,
             buffer: [0.0; 2048],
             buffer_index: 0,
+            length: 0,
         }
     }
 
@@ -282,6 +285,9 @@ impl TriangleChannel {
         self.current_timer = timer;
         self.increment = -1;
         self.volume = 15;
+
+        let length_index = value.bitand(0b11111000).shr(3);
+        self.length = LENGTH_VALUES[length_index as usize];
     }
 
     fn set_linear_counter_flag(&mut self, value: u8) {}
@@ -294,8 +300,6 @@ impl TriangleChannel {
         if self.current_timer > 0 {
             self.current_timer -= 1;
         } else {
-            // adjust triangle level
-            // dbg!(self.volume);
             self.current_timer = self.timer;
             if self.volume > 0 && self.increment < 0 {
                 self.volume -= 1;
@@ -320,13 +324,23 @@ impl TriangleChannel {
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
-        self.buffer[self.buffer_index] = 0.32 * self.volume as f32 / 15.0 - 0.16;
+        self.buffer[self.buffer_index] = if self.length == 0 {
+            0.0
+        } else {
+            0.32 * self.volume as f32 / 15.0 - 0.16
+        };
 
         // dbg!(self.buffer_index, self.buffer[self.buffer_index]);
         self.buffer_index += 1;
         if self.buffer_index == self.buffer.len() {
             self.buffer_index = 0;
             self.queue.queue(&self.buffer);
+        }
+    }
+
+    fn length_step(&mut self) {
+        if self.length > 0 {
+            self.length -= 1;
         }
     }
 }
@@ -375,6 +389,8 @@ impl Apu {
 
             self.pulse2_channel.sweep_step();
             self.pulse2_channel.length_step();
+
+            self.triangle_channel.length_step();
         }
 
         if self.half_cycle_count % 7547 == 0 {
