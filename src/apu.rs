@@ -221,10 +221,17 @@ impl AudioCallback for PulseHandler {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PulseType {
+    Pulse1,
+    Pulse2,
+}
+
 struct PulseChannel {
     queue: AudioQueue<f32>,
     envelope: PulseEnvelope,
     sweep: Sweep,
+    pulse_type: PulseType,
 
     low_timer: u8,
     timer: u16,
@@ -244,8 +251,7 @@ struct PulseChannel {
 const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
 
 impl PulseChannel {
-    //TODO: pulse2
-    fn new(queue: AudioQueue<f32>) -> PulseChannel {
+    fn new(queue: AudioQueue<f32>, pulse_type: PulseType) -> PulseChannel {
         PulseChannel {
             queue,
             envelope: PulseEnvelope::new(),
@@ -260,6 +266,7 @@ impl PulseChannel {
             envelope_clock: 0,
             current_volume: 0,
             sweep_clock: 0,
+            pulse_type,
         }
     }
 
@@ -289,14 +296,12 @@ impl PulseChannel {
     }
 
     fn step(&mut self) {
-        // if self.timer >= 8 && self.timer < 0x800 {
         if self.current_timer > 0 {
             self.current_timer -= 1;
         } else {
             self.current_timer = self.timer;
             self.current_duty = (7 + self.current_duty) % 8;
         }
-        // }
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
@@ -350,8 +355,13 @@ impl PulseChannel {
             self.sweep_clock -= 1;
         } else {
             let add = self.timer >> self.sweep.shift;
+            let extra = if self.pulse_type == PulseType::Pulse1 {
+                1
+            } else {
+                0
+            };
             let target_timer = if self.sweep.negate {
-                self.timer - add - 1
+                self.timer - add - extra
             } else {
                 self.timer + add
             };
@@ -449,7 +459,7 @@ impl Apu {
             pulse1_timer: 0,
             pulse1_current_timer: 0,
             current_duty: 0,
-            pulse1_channel: PulseChannel::new(pulse1_queue),
+            pulse1_channel: PulseChannel::new(pulse1_queue, PulseType::Pulse1),
         }
     }
 
