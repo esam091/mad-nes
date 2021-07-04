@@ -340,7 +340,7 @@ impl TriangleChannel {
         self.buffer[self.buffer_index] = if self.length == 0 || self.current_linear_counter == 0 {
             0.0
         } else {
-            0.32 * self.volume as f32 / 15.0 - 0.16
+            0.2 * self.volume as f32 / 15.0 - 0.1
         };
 
         // dbg!(self.buffer_index, self.buffer[self.buffer_index]);
@@ -394,8 +394,8 @@ impl Apu {
         let triangle_queue: AudioQueue<f32> =
             audio_subsystem.open_queue(None, &desired_spec).unwrap();
 
-        // pulse1_queue.resume();
-        // pulse2_queue.resume();
+        pulse1_queue.resume();
+        pulse2_queue.resume();
         triangle_queue.resume();
 
         Apu {
