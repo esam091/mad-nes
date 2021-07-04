@@ -237,6 +237,7 @@ struct PulseChannel {
     buffer_index: usize,
 
     envelope_clock: u8,
+    sweep_clock: u8,
     current_volume: u8,
 }
 
@@ -257,6 +258,7 @@ impl PulseChannel {
             current_timer: 0,
             envelope_clock: 0,
             current_volume: 0,
+            sweep_clock: 0,
         }
     }
 
@@ -268,6 +270,7 @@ impl PulseChannel {
 
     fn set_sweep_flag(&mut self, flag: u8) {
         self.sweep = Sweep::from_flags(flag);
+        self.sweep_clock = self.sweep.period;
     }
 
     fn set_low_timer(&mut self, timer: u8) {
@@ -284,14 +287,14 @@ impl PulseChannel {
     }
 
     fn step(&mut self) {
-        if self.timer >= 8 && self.timer < 0x800 {
-            if self.current_timer > 0 {
-                self.current_timer -= 1;
-            } else {
-                self.current_timer = self.timer;
-                self.current_duty = (7 + self.current_duty) % 8;
-            }
+        // if self.timer >= 8 && self.timer < 0x800 {
+        if self.current_timer > 0 {
+            self.current_timer -= 1;
+        } else {
+            self.current_timer = self.timer;
+            self.current_duty = (7 + self.current_duty) % 8;
         }
+        // }
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
@@ -328,6 +331,26 @@ impl PulseChannel {
             if self.current_volume > 0 {
                 self.current_volume -= 1;
             }
+        }
+    }
+
+    fn sweep_step(&mut self) {
+        if self.timer < 8 || self.timer > 0x7ff || !self.sweep.enabled {
+            return;
+        }
+
+        if self.sweep_clock > 0 {
+            self.sweep_clock -= 1;
+        } else {
+            let add = self.timer >> self.sweep.shift;
+            let target_timer = if self.sweep.negate {
+                self.timer - add - 1
+            } else {
+                self.timer + add
+            };
+
+            self.timer = target_timer;
+            self.sweep_clock = self.sweep.period;
         }
     }
 }
@@ -418,6 +441,10 @@ impl Apu {
     }
 
     pub fn half_step(&mut self) {
+        if self.half_cycle_count % 14913 == 0 {
+            self.pulse1_channel.sweep_step();
+        }
+
         if self.half_cycle_count % 7547 == 0 {
             self.pulse1_channel.envelope_step();
         }
