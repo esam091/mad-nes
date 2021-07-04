@@ -244,6 +244,7 @@ struct PulseChannel {
     buffer_index: usize,
 
     envelope_clock: u8,
+    restart_envelope: bool,
     sweep_clock: u8,
     current_volume: u8,
 }
@@ -267,14 +268,13 @@ impl PulseChannel {
             current_volume: 0,
             sweep_clock: 0,
             pulse_type,
+            restart_envelope: false,
         }
     }
 
     fn set_envelope_flag(&mut self, flag: u8) {
         self.envelope = PulseEnvelope::from_flags(flag);
-        self.envelope_clock = self.envelope.volume;
-        self.current_volume = 15;
-        // dbg!(self.envelope.loops_playback);
+        self.restart_envelope = true;
     }
 
     fn set_sweep_flag(&mut self, flag: u8) {
@@ -293,6 +293,7 @@ impl PulseChannel {
         self.timer = self.low_timer as u16 | u16::from(length_and_high).bitand(0b111).shl(8);
         self.current_timer = self.timer;
         self.current_duty = 0;
+        self.restart_envelope;
     }
 
     fn step(&mut self) {
@@ -328,7 +329,10 @@ impl PulseChannel {
     }
 
     fn envelope_step(&mut self) {
-        if self.current_volume == 0 {
+        if self.restart_envelope {
+            self.envelope_clock = self.envelope.volume;
+            self.current_volume = 15;
+            self.restart_envelope = false;
             return;
         }
 
@@ -347,7 +351,7 @@ impl PulseChannel {
     }
 
     fn sweep_step(&mut self) {
-        if self.timer < 8 || self.timer > 0x7ff || !self.sweep.enabled {
+        if self.timer < 8 || self.timer > 0x7ff || !self.sweep.enabled || self.sweep.shift == 0 {
             return;
         }
 
