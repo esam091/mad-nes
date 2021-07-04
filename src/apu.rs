@@ -235,6 +235,9 @@ struct PulseChannel {
 
     buffer: [f32; 2048],
     buffer_index: usize,
+
+    envelope_clock: u8,
+    current_volume: u8,
 }
 
 const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
@@ -252,11 +255,15 @@ impl PulseChannel {
             buffer_index: 0,
             current_duty: 0,
             current_timer: 0,
+            envelope_clock: 0,
+            current_volume: 0,
         }
     }
 
     fn set_envelope_flag(&mut self, flag: u8) {
         self.envelope = PulseEnvelope::from_flags(flag);
+        self.envelope_clock = self.envelope.volume;
+        self.current_volume = 15;
     }
 
     fn set_sweep_flag(&mut self, flag: u8) {
@@ -288,18 +295,34 @@ impl PulseChannel {
     }
 
     fn fill_buffer_and_start_queue(&mut self) {
+        // dbg!(self.current_volume);
         self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff {
             0.0
         } else if DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) != 0 {
-            PULSE_MAX_VOLUME
+            PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
         } else {
-            -PULSE_MAX_VOLUME
+            -PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
         };
 
         self.buffer_index += 1;
         if self.buffer_index == self.buffer.len() {
             self.buffer_index = 0;
             self.queue.queue(&self.buffer);
+        }
+    }
+
+    fn envelope_step(&mut self) {
+        if self.current_volume == 0 {
+            return;
+        }
+
+        if self.envelope_clock > 0 {
+            self.envelope_clock -= 1;
+        } else {
+            self.envelope_clock = self.envelope.volume;
+            if self.current_volume > 0 {
+                self.current_volume -= 1;
+            }
         }
     }
 }
@@ -390,17 +413,16 @@ impl Apu {
     }
 
     pub fn half_step(&mut self) {
+        if self.half_cycle_count % 7547 == 0 {
+            self.pulse1_channel.envelope_step();
+        }
+
         if self.half_cycle_count % 2 == 0 {
             self.pulse1_channel.step();
         }
 
         if self.half_cycle_count % 40 == 0 {
             self.pulse1_channel.fill_buffer_and_start_queue();
-        }
-
-        if self.current_index == 2048 {
-            self.current_index = 0;
-            self.pulse1_queue.queue(&self.buffer);
         }
 
         self.half_cycle_count += 1;
