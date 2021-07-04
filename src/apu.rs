@@ -244,6 +244,7 @@ struct PulseChannel {
 const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
 
 impl PulseChannel {
+    //TODO: pulse2
     fn new(queue: AudioQueue<f32>) -> PulseChannel {
         PulseChannel {
             queue,
@@ -266,6 +267,7 @@ impl PulseChannel {
         self.envelope = PulseEnvelope::from_flags(flag);
         self.envelope_clock = self.envelope.volume;
         self.current_volume = 15;
+        // dbg!(self.envelope.loops_playback);
     }
 
     fn set_sweep_flag(&mut self, flag: u8) {
@@ -304,7 +306,8 @@ impl PulseChannel {
             PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
         };
 
-        self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff {
+        self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff || self.length == 0
+        {
             0.0
         } else if DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) != 0 {
             volume
@@ -331,6 +334,10 @@ impl PulseChannel {
             if self.current_volume > 0 {
                 self.current_volume -= 1;
             }
+
+            if self.envelope.loops_playback && self.current_volume == 0 {
+                self.current_volume = 15;
+            }
         }
     }
 
@@ -351,6 +358,12 @@ impl PulseChannel {
 
             self.timer = target_timer;
             self.sweep_clock = self.sweep.period;
+        }
+    }
+
+    fn length_step(&mut self) {
+        if self.length > 0 && !self.envelope.loops_playback {
+            self.length -= 1;
         }
     }
 }
@@ -443,6 +456,7 @@ impl Apu {
     pub fn half_step(&mut self) {
         if self.half_cycle_count % 14913 == 0 {
             self.pulse1_channel.sweep_step();
+            self.pulse1_channel.length_step();
         }
 
         if self.half_cycle_count % 7547 == 0 {
