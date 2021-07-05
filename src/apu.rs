@@ -526,7 +526,7 @@ impl Apu {
         }
 
         // quarter frame
-        if self.half_cycle_count % 7547 == 0 {
+        if self.half_cycle_count % 7457 == 0 {
             self.pulse1_channel.envelope_step();
             self.pulse2_channel.envelope_step();
 
