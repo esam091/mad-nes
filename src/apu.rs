@@ -481,6 +481,8 @@ pub struct Apu {
 
     buffer: [f32; 2048],
     buffer_index: usize,
+    next_fill: usize,
+    has_extra: bool,
 }
 
 impl Apu {
@@ -506,6 +508,8 @@ impl Apu {
             output_queue,
             buffer: [0.0; 2048],
             buffer_index: 0,
+            next_fill: 40,
+            has_extra: true,
         }
     }
 
@@ -540,7 +544,9 @@ impl Apu {
             self.noise_channel.step();
         }
 
-        if self.half_cycle_count % 40 == 0 {
+        if self.half_cycle_count % self.next_fill == 0 {
+            self.next_fill += 40 + self.has_extra as usize;
+            self.has_extra = !self.has_extra;
             let pulse1 = self.pulse1_channel.get_current_volume() as usize;
             // let pulse1 = 0;
 
