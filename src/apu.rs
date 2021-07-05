@@ -91,7 +91,6 @@ enum PulseType {
 }
 
 struct PulseChannel {
-    queue: AudioQueue<f32>,
     envelope: Envelope,
     sweep: Sweep,
     pulse_type: PulseType,
@@ -103,9 +102,6 @@ struct PulseChannel {
 
     current_duty: u8,
 
-    buffer: [f32; 2048],
-    buffer_index: usize,
-
     envelope_clock: u8,
     restart_envelope: bool,
     sweep_clock: u8,
@@ -115,16 +111,13 @@ struct PulseChannel {
 const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
 
 impl PulseChannel {
-    fn new(queue: AudioQueue<f32>, pulse_type: PulseType) -> PulseChannel {
+    fn new(pulse_type: PulseType) -> PulseChannel {
         PulseChannel {
-            queue,
             envelope: Envelope::new(),
             sweep: Sweep::new(),
             timer: 0,
             low_timer: 0,
             length: 0,
-            buffer: [0.0; 2048],
-            buffer_index: 0,
             current_duty: 0,
             current_timer: 0,
             envelope_clock: 0,
@@ -168,26 +161,17 @@ impl PulseChannel {
         }
     }
 
-    fn fill_buffer_and_start_queue(&mut self) {
-        let volume = if self.envelope.constant_volume {
-            PULSE_MAX_VOLUME * self.envelope.volume as f32 / 15.0
-        } else {
-            PULSE_MAX_VOLUME * self.current_volume as f32 / 15.0
-        };
-
-        self.buffer[self.buffer_index] = if self.timer < 8 || self.timer > 0x7ff || self.length == 0
+    fn get_current_volume(&self) -> u8 {
+        if self.timer < 8
+            || self.timer > 0x7ff
+            || self.length == 0
+            || DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) == 0
         {
-            0.0
-        } else if DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) != 0 {
-            volume
+            0
+        } else if self.envelope.constant_volume {
+            self.envelope.volume
         } else {
-            -volume
-        };
-
-        self.buffer_index += 1;
-        if self.buffer_index == self.buffer.len() {
-            self.buffer_index = 0;
-            self.queue.queue(&self.buffer);
+            self.current_volume
         }
     }
 
@@ -246,16 +230,12 @@ impl PulseChannel {
 }
 
 struct TriangleChannel {
-    queue: AudioQueue<f32>,
     increment: i16,
     timer: u16,
     current_timer: u16,
 
     volume: u8,
     low_timer: u8,
-
-    buffer: [f32; 2048],
-    buffer_index: usize,
 
     length: u8,
     current_linear_counter: u8,
@@ -266,16 +246,13 @@ struct TriangleChannel {
 }
 
 impl TriangleChannel {
-    fn new(queue: AudioQueue<f32>) -> TriangleChannel {
+    fn new() -> TriangleChannel {
         TriangleChannel {
-            queue,
             increment: 0,
             timer: 0,
             current_timer: 0,
             low_timer: 0,
             volume: 0,
-            buffer: [0.0; 2048],
-            buffer_index: 0,
             length: 0,
             current_linear_counter: 0,
             linear_counter: 0,
@@ -336,18 +313,11 @@ impl TriangleChannel {
         }
     }
 
-    fn fill_buffer_and_start_queue(&mut self) {
-        self.buffer[self.buffer_index] = if self.length == 0 || self.current_linear_counter == 0 {
-            0.0
+    fn get_current_volume(&self) -> u8 {
+        if self.length == 0 || self.current_linear_counter == 0 {
+            0
         } else {
-            0.2 * self.volume as f32 / 15.0 - 0.1
-        };
-
-        // dbg!(self.buffer_index, self.buffer[self.buffer_index]);
-        self.buffer_index += 1;
-        if self.buffer_index == self.buffer.len() {
-            self.buffer_index = 0;
-            self.queue.queue(&self.buffer);
+            self.volume
         }
     }
 
@@ -371,7 +341,6 @@ impl TriangleChannel {
 }
 
 struct NoiseChannel {
-    queue: AudioQueue<f32>,
     shift_register: u16,
     mode_flag: bool,
     noise_period: u16,
@@ -380,8 +349,6 @@ struct NoiseChannel {
     envelope_clock: u8,
     current_volume: u8,
 
-    buffer: [f32; 2048],
-    buffer_index: usize,
     length: u8,
     restart_envelope: bool,
 }
@@ -391,9 +358,8 @@ const NOISE_PERIOD_TABLE: [u16; 16] = [
 ];
 
 impl NoiseChannel {
-    fn new(queue: AudioQueue<f32>) -> NoiseChannel {
+    fn new() -> NoiseChannel {
         NoiseChannel {
-            queue,
             shift_register: 1,
             current_volume: 0,
             mode_flag: false,
@@ -401,8 +367,6 @@ impl NoiseChannel {
             envelope: Envelope::new(),
             envelope_clock: 0,
             current_noise_timer: 0,
-            buffer: [0.0; 2048],
-            buffer_index: 0,
             length: 0,
             restart_envelope: false,
         }
@@ -450,29 +414,6 @@ impl NoiseChannel {
         }
     }
 
-    fn fill_buffer_and_start_queue(&mut self) {
-        let volume = if self.envelope.constant_volume {
-            self.envelope.volume as f32 / 15.0
-        } else {
-            self.current_volume as f32 / 15.0
-        };
-
-        let final_volume = if self.length == 0 {
-            0.0
-        } else if self.shift_register & 1 == 0 {
-            0.1 * volume
-        } else {
-            -0.1 * volume
-        };
-        self.buffer[self.buffer_index] = final_volume;
-
-        self.buffer_index += 1;
-        if self.buffer_index == self.buffer.len() {
-            self.buffer_index = 0;
-            self.queue.queue(&self.buffer);
-        }
-    }
-
     fn envelope_step(&mut self) {
         if self.restart_envelope {
             self.envelope_clock = self.envelope.volume;
@@ -494,6 +435,38 @@ impl NoiseChannel {
             }
         }
     }
+
+    fn get_current_volume(&self) -> u8 {
+        if self.shift_register & 1 == 0 && self.length != 0 {
+            if self.envelope.constant_volume {
+                self.envelope.volume
+            } else {
+                self.current_volume
+            }
+        } else {
+            0
+        }
+    }
+}
+
+fn create_tnd_table() -> [f32; 203] {
+    let mut table = [0.0; 203];
+
+    for n in 0..table.len() {
+        table[n] = 163.67 / (24329.0 / n as f32 + 100.0);
+    }
+
+    table
+}
+
+fn create_pulse_table() -> [f32; 31] {
+    let mut table = [0.0; 31];
+
+    for n in 0..table.len() {
+        table[n] = 95.52 / (8128.0 / n as f32 + 100.0)
+    }
+
+    table
 }
 
 pub struct Apu {
@@ -502,6 +475,12 @@ pub struct Apu {
     pulse2_channel: PulseChannel,
     triangle_channel: TriangleChannel,
     noise_channel: NoiseChannel,
+    tnd_table: [f32; 203],
+    pulse_table: [f32; 31],
+    output_queue: AudioQueue<f32>,
+
+    buffer: [f32; 2048],
+    buffer_index: usize,
 }
 
 impl Apu {
@@ -512,34 +491,27 @@ impl Apu {
             samples: Some(2048), // default sample size
         };
 
-        let pulse1_queue: AudioQueue<f32> =
-            audio_subsystem.open_queue(None, &desired_spec).unwrap();
-
-        let pulse2_queue: AudioQueue<f32> =
-            audio_subsystem.open_queue(None, &desired_spec).unwrap();
-
-        let triangle_queue: AudioQueue<f32> =
-            audio_subsystem.open_queue(None, &desired_spec).unwrap();
-
-        let noise_queue: AudioQueue<f32> = audio_subsystem.open_queue(None, &desired_spec).unwrap();
-
-        // pulse1_queue.resume();
-        // pulse2_queue.resume();
-        // triangle_queue.resume();
-        noise_queue.resume();
+        let output_queue =
+            audio_subsystem.open_queue(None, &desired_spec).unwrap() as AudioQueue<f32>;
+        output_queue.resume();
 
         Apu {
             half_cycle_count: 0,
-            pulse1_channel: PulseChannel::new(pulse1_queue, PulseType::Pulse1),
-            pulse2_channel: PulseChannel::new(pulse2_queue, PulseType::Pulse2),
-            triangle_channel: TriangleChannel::new(triangle_queue),
-            noise_channel: NoiseChannel::new(noise_queue),
+            pulse1_channel: PulseChannel::new(PulseType::Pulse1),
+            pulse2_channel: PulseChannel::new(PulseType::Pulse2),
+            triangle_channel: TriangleChannel::new(),
+            noise_channel: NoiseChannel::new(),
+            tnd_table: create_tnd_table(),
+            pulse_table: create_pulse_table(),
+            output_queue,
+            buffer: [0.0; 2048],
+            buffer_index: 0,
         }
     }
 
     pub fn half_step(&mut self) {
         self.triangle_channel.step();
-        self.noise_channel.step(); // duck tales sounds more correct this way, gonna check later
+        // self.noise_channel.step(); // duck tales sounds more correct this way, gonna check later
 
         // half frame
         if self.half_cycle_count % 14913 == 0 {
@@ -565,13 +537,37 @@ impl Apu {
         if self.half_cycle_count % 2 == 0 {
             self.pulse1_channel.step();
             self.pulse2_channel.step();
+            self.noise_channel.step();
         }
 
         if self.half_cycle_count % 40 == 0 {
-            self.pulse1_channel.fill_buffer_and_start_queue();
-            self.pulse2_channel.fill_buffer_and_start_queue();
-            self.triangle_channel.fill_buffer_and_start_queue();
-            self.noise_channel.fill_buffer_and_start_queue();
+            let pulse1 = self.pulse1_channel.get_current_volume() as usize;
+            // let pulse1 = 0;
+
+            let pulse2 = self.pulse2_channel.get_current_volume() as usize;
+            // let pulse2 = 0;
+
+            let triangle = self.triangle_channel.get_current_volume() as usize;
+            // let triangle = 0;
+
+            let noise = self.noise_channel.get_current_volume() as usize;
+            // let noise = 0;
+
+            let dmc = 0;
+
+            let tnd_out = self.tnd_table[3 * triangle + 2 * noise + dmc];
+
+            let pulse_out = self.pulse_table[pulse1 + pulse2];
+
+            let output = tnd_out + pulse_out;
+
+            self.buffer[self.buffer_index] = output;
+
+            self.buffer_index += 1;
+            if self.buffer_index == 2048 {
+                self.buffer_index = 0;
+                self.output_queue.queue(&self.buffer);
+            }
         }
 
         self.half_cycle_count += 1;
