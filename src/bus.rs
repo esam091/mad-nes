@@ -126,6 +126,10 @@ impl BusTrait for RealBus {
             0x4008 => self.apu.write_triangle_linear_counter(value),
             0x400a => self.apu.write_triangle_timer_low(value),
             0x400b => self.apu.write_triangle_length_and_timer(value),
+            0x400c => self.apu.write_noise_envelope(value),
+            0x400e => self.apu.write_noise_mode_and_period(value),
+            0x400f => self.apu.write_noise_length_counter(value),
+
             // 0x4000..=0x4013 | 0x4015 | 4017 => {
             //     println!(
             //         "APU Write {:#06X} = {:#04X} at {:?}",

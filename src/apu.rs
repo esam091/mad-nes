@@ -1,4 +1,4 @@
-use std::ops::{BitAnd, Shl, Shr};
+use std::ops::{BitAnd, Shl, Shr, ShrAssign};
 
 use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
@@ -18,16 +18,16 @@ const LENGTH_VALUES: [u8; 32] = [
     192, 24, 72, 26, 16, 28, 32, 30,
 ];
 
-struct PulseEnvelope {
+struct Envelope {
     duty: u8,
     volume: u8,
     loops_playback: bool,
     constant_volume: bool,
 }
 
-impl PulseEnvelope {
-    fn new() -> PulseEnvelope {
-        PulseEnvelope {
+impl Envelope {
+    fn new() -> Envelope {
+        Envelope {
             duty: 0,
             volume: 0,
             loops_playback: false,
@@ -35,13 +35,13 @@ impl PulseEnvelope {
         }
     }
 
-    fn from_flags(flag: u8) -> PulseEnvelope {
+    fn from_flags(flag: u8) -> Envelope {
         let duty = flag.bitand(0b11000000).shr(6);
         let loops_playback = flag.bitand(0b100000) != 0;
         let constant_volume = flag.bitand(0b10000) != 0;
         let volume = flag.bitand(0b1111);
 
-        PulseEnvelope {
+        Envelope {
             duty,
             loops_playback,
             constant_volume,
@@ -92,7 +92,7 @@ enum PulseType {
 
 struct PulseChannel {
     queue: AudioQueue<f32>,
-    envelope: PulseEnvelope,
+    envelope: Envelope,
     sweep: Sweep,
     pulse_type: PulseType,
 
@@ -118,7 +118,7 @@ impl PulseChannel {
     fn new(queue: AudioQueue<f32>, pulse_type: PulseType) -> PulseChannel {
         PulseChannel {
             queue,
-            envelope: PulseEnvelope::new(),
+            envelope: Envelope::new(),
             sweep: Sweep::new(),
             timer: 0,
             low_timer: 0,
@@ -136,7 +136,7 @@ impl PulseChannel {
     }
 
     fn set_envelope_flag(&mut self, flag: u8) {
-        self.envelope = PulseEnvelope::from_flags(flag);
+        self.envelope = Envelope::from_flags(flag);
         self.restart_envelope = true;
     }
 
@@ -370,11 +370,131 @@ impl TriangleChannel {
     }
 }
 
+struct NoiseChannel {
+    queue: AudioQueue<f32>,
+    shift_register: u16,
+    mode_flag: bool,
+    noise_period: u16,
+    current_noise_timer: u16,
+    envelope: Envelope,
+    envelope_clock: u8,
+    current_volume: u8,
+
+    buffer: [f32; 2048],
+    buffer_index: usize,
+    length: u8,
+}
+
+const NOISE_PERIOD_TABLE: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
+
+impl NoiseChannel {
+    fn new(queue: AudioQueue<f32>) -> NoiseChannel {
+        NoiseChannel {
+            queue,
+            shift_register: 1,
+            current_volume: 0,
+            mode_flag: false,
+            noise_period: 0,
+            envelope: Envelope::new(),
+            envelope_clock: 0,
+            current_noise_timer: 0,
+            buffer: [0.0; 2048],
+            buffer_index: 0,
+            length: 0,
+        }
+    }
+
+    fn set_envelope_flag(&mut self, flag: u8) {
+        self.envelope = Envelope::from_flags(flag);
+        self.envelope_clock = self.envelope.volume;
+        self.current_volume = 15;
+    }
+
+    fn set_mode_and_period(&mut self, flag: u8) {
+        self.mode_flag = flag & 0x80 != 0;
+
+        let noise_period_index = flag & 0b1111;
+        self.noise_period = NOISE_PERIOD_TABLE[noise_period_index as usize];
+    }
+
+    fn set_length_counter(&mut self, flag: u8) {
+        let length_index = flag.bitand(0b11111000).shr(3);
+        self.length = LENGTH_VALUES[length_index as usize];
+        self.current_noise_timer = self.noise_period;
+    }
+
+    fn step(&mut self) {
+        if self.current_noise_timer > 0 {
+            self.current_noise_timer -= 1;
+        } else {
+            self.current_noise_timer = self.noise_period;
+            //adjust shift
+            let bit = (self.shift_register & 1)
+                ^ if self.mode_flag {
+                    self.shift_register.bitand(0b1000000).shr(6)
+                } else {
+                    self.shift_register.bitand(0b10).shr(1)
+                };
+
+            self.shift_register >>= 1;
+            self.shift_register |= bit << 14;
+        }
+    }
+
+    fn length_step(&mut self) {
+        if self.length > 0 {
+            self.length -= 1;
+        }
+    }
+
+    fn fill_buffer_and_start_queue(&mut self) {
+        let volume = if self.envelope.constant_volume {
+            self.envelope.volume as f32 / 15.0
+        } else {
+            self.current_volume as f32 / 15.0
+        };
+
+        let final_volume = if self.length == 0 {
+            0.0
+        } else if self.shift_register & 1 == 0 {
+            0.1 * volume
+        } else {
+            -0.1 * volume
+        };
+        self.buffer[self.buffer_index] = final_volume;
+
+        self.buffer_index += 1;
+        if self.buffer_index == self.buffer.len() {
+            self.buffer_index = 0;
+            self.queue.queue(&self.buffer);
+        }
+    }
+
+    fn envelope_step(&mut self) {
+        if self.envelope_clock > 0 {
+            self.envelope_clock -= 1;
+        } else {
+            self.envelope_clock = self.envelope.volume;
+
+            if self.current_volume > 0 {
+                self.current_volume -= 1;
+            }
+
+            if self.envelope.loops_playback && self.current_volume == 0 {
+                self.current_volume = 15;
+            }
+        }
+    }
+}
+
 pub struct Apu {
     half_cycle_count: usize,
     pulse1_channel: PulseChannel,
     pulse2_channel: PulseChannel,
     triangle_channel: TriangleChannel,
+    noise_channel: NoiseChannel,
 }
 
 impl Apu {
@@ -394,15 +514,19 @@ impl Apu {
         let triangle_queue: AudioQueue<f32> =
             audio_subsystem.open_queue(None, &desired_spec).unwrap();
 
-        pulse1_queue.resume();
-        pulse2_queue.resume();
-        triangle_queue.resume();
+        let noise_queue: AudioQueue<f32> = audio_subsystem.open_queue(None, &desired_spec).unwrap();
+
+        // pulse1_queue.resume();
+        // pulse2_queue.resume();
+        // triangle_queue.resume();
+        noise_queue.resume();
 
         Apu {
             half_cycle_count: 0,
             pulse1_channel: PulseChannel::new(pulse1_queue, PulseType::Pulse1),
             pulse2_channel: PulseChannel::new(pulse2_queue, PulseType::Pulse2),
             triangle_channel: TriangleChannel::new(triangle_queue),
+            noise_channel: NoiseChannel::new(noise_queue),
         }
     }
 
@@ -418,6 +542,7 @@ impl Apu {
             self.pulse2_channel.length_step();
 
             self.triangle_channel.length_step();
+            self.noise_channel.length_step();
         }
 
         // quarter frame
@@ -426,20 +551,38 @@ impl Apu {
             self.pulse2_channel.envelope_step();
 
             self.triangle_channel.linear_step();
+            self.noise_channel.envelope_step();
         }
 
         if self.half_cycle_count % 2 == 0 {
             self.pulse1_channel.step();
             self.pulse2_channel.step();
+            self.noise_channel.step();
         }
 
         if self.half_cycle_count % 40 == 0 {
             self.pulse1_channel.fill_buffer_and_start_queue();
             self.pulse2_channel.fill_buffer_and_start_queue();
             self.triangle_channel.fill_buffer_and_start_queue();
+            self.noise_channel.fill_buffer_and_start_queue();
         }
 
         self.half_cycle_count += 1;
+    }
+
+    pub fn write_noise_envelope(&mut self, value: u8) {
+        log_apu!("Write $400c: {:#010b}", value);
+        self.noise_channel.set_envelope_flag(value);
+    }
+
+    pub fn write_noise_mode_and_period(&mut self, value: u8) {
+        log_apu!("Write $400e: {:#04X}", value);
+        self.noise_channel.set_mode_and_period(value);
+    }
+
+    pub fn write_noise_length_counter(&mut self, value: u8) {
+        log_apu!("Write $400f: {:#04X}", value);
+        self.noise_channel.set_length_counter(value);
     }
 
     pub fn write_pulse1_length_and_timer(&mut self, value: u8) {
