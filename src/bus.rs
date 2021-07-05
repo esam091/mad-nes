@@ -130,14 +130,14 @@ impl BusTrait for RealBus {
             0x400e => self.apu.write_noise_mode_and_period(value),
             0x400f => self.apu.write_noise_length_counter(value),
 
-            // 0x4000..=0x4013 | 0x4015 | 4017 => {
-            //     println!(
-            //         "APU Write {:#06X} = {:#04X} at {:?}",
-            //         address,
-            //         value,
-            //         Local::now()
-            //     );
-            // }
+            0x4015 | 4017 => {
+                println!(
+                    "APU Write {:#06X} = {:#04X} at {:?}",
+                    address,
+                    value,
+                    Local::now()
+                );
+            }
             0x4014 => {
                 log_ppu!("Write $4014: {:#04X}", value);
                 let starting_address = value as usize * 0x100;

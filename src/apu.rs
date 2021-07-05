@@ -383,6 +383,7 @@ struct NoiseChannel {
     buffer: [f32; 2048],
     buffer_index: usize,
     length: u8,
+    restart_envelope: bool,
 }
 
 const NOISE_PERIOD_TABLE: [u16; 16] = [
@@ -403,13 +404,12 @@ impl NoiseChannel {
             buffer: [0.0; 2048],
             buffer_index: 0,
             length: 0,
+            restart_envelope: false,
         }
     }
 
     fn set_envelope_flag(&mut self, flag: u8) {
         self.envelope = Envelope::from_flags(flag);
-        self.envelope_clock = self.envelope.volume;
-        self.current_volume = 15;
     }
 
     fn set_mode_and_period(&mut self, flag: u8) {
@@ -417,12 +417,13 @@ impl NoiseChannel {
 
         let noise_period_index = flag & 0b1111;
         self.noise_period = NOISE_PERIOD_TABLE[noise_period_index as usize];
+        self.current_noise_timer = self.noise_period;
     }
 
     fn set_length_counter(&mut self, flag: u8) {
         let length_index = flag.bitand(0b11111000).shr(3);
         self.length = LENGTH_VALUES[length_index as usize];
-        self.current_noise_timer = self.noise_period;
+        self.restart_envelope = true;
     }
 
     fn step(&mut self) {
@@ -444,7 +445,7 @@ impl NoiseChannel {
     }
 
     fn length_step(&mut self) {
-        if self.length > 0 {
+        if self.length > 0 && !self.envelope.loops_playback {
             self.length -= 1;
         }
     }
@@ -473,6 +474,12 @@ impl NoiseChannel {
     }
 
     fn envelope_step(&mut self) {
+        if self.restart_envelope {
+            self.envelope_clock = self.envelope.volume;
+            self.current_volume = 15;
+            return;
+        }
+
         if self.envelope_clock > 0 {
             self.envelope_clock -= 1;
         } else {
@@ -532,6 +539,7 @@ impl Apu {
 
     pub fn half_step(&mut self) {
         self.triangle_channel.step();
+        self.noise_channel.step(); // duck tales sounds more correct this way, gonna check later
 
         // half frame
         if self.half_cycle_count % 14913 == 0 {
@@ -557,7 +565,6 @@ impl Apu {
         if self.half_cycle_count % 2 == 0 {
             self.pulse1_channel.step();
             self.pulse2_channel.step();
-            self.noise_channel.step();
         }
 
         if self.half_cycle_count % 40 == 0 {
