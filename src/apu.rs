@@ -142,7 +142,6 @@ impl PulseChannel {
 
     fn set_envelope_flag(&mut self, flag: u8) {
         self.envelope = Envelope::from_flags(flag);
-        self.restart_envelope = true;
     }
 
     fn set_sweep_flag(&mut self, flag: u8) {
