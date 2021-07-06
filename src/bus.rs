@@ -60,10 +60,10 @@ impl BusTrait for RealBus {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
-            0x4017 => {
-                println!("APU Read {:#06X}", address);
-                self.memory[address as usize]
-            }
+            // 0x4017 => { this is used for controller 2 if i'm not mistaken
+            //     println!("APU Read {:#06X}", address);
+            //     self.memory[address as usize]
+            // }
             0x4015 => self.apu.read_status(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {

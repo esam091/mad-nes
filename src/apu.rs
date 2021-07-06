@@ -191,7 +191,7 @@ impl PulseChannel {
         }
     }
 
-    fn envelope_step(&mut self) {
+    fn quarter_frame_clock(&mut self) {
         if self.restart_envelope {
             self.envelope_clock = self.envelope.volume;
             self.current_volume = 15;
@@ -211,6 +211,11 @@ impl PulseChannel {
                 self.current_volume = 15;
             }
         }
+    }
+
+    fn half_frame_clock(&mut self) {
+        self.sweep_step();
+        self.length_step();
     }
 
     fn sweep_step(&mut self) {
@@ -352,13 +357,13 @@ impl TriangleChannel {
         }
     }
 
-    fn length_step(&mut self) {
+    fn half_frame_clock(&mut self) {
         if self.length > 0 && !self.control_flag {
             self.length -= 1;
         }
     }
 
-    fn linear_step(&mut self) {
+    fn quarter_frame_clock(&mut self) {
         if self.linear_counter_reload {
             self.current_linear_counter = self.linear_counter;
         } else if self.current_linear_counter > 0 {
@@ -455,13 +460,13 @@ impl NoiseChannel {
         }
     }
 
-    fn length_step(&mut self) {
+    fn half_frame_clock(&mut self) {
         if self.length > 0 && !self.envelope.loops_playback {
             self.length -= 1;
         }
     }
 
-    fn envelope_step(&mut self) {
+    fn quarter_frame_clock(&mut self) {
         if self.restart_envelope {
             self.envelope_clock = self.envelope.volume;
             self.current_volume = 15;
@@ -566,23 +571,18 @@ impl Apu {
 
         // half frame
         if self.half_cycle_count % 14913 == 0 {
-            self.pulse1_channel.sweep_step();
-            self.pulse1_channel.length_step();
-
-            self.pulse2_channel.sweep_step();
-            self.pulse2_channel.length_step();
-
-            self.triangle_channel.length_step();
-            self.noise_channel.length_step();
+            self.pulse1_channel.half_frame_clock();
+            self.pulse2_channel.half_frame_clock();
+            self.triangle_channel.half_frame_clock();
+            self.noise_channel.half_frame_clock();
         }
 
         // quarter frame
         if self.half_cycle_count % 7457 == 0 {
-            self.pulse1_channel.envelope_step();
-            self.pulse2_channel.envelope_step();
-
-            self.triangle_channel.linear_step();
-            self.noise_channel.envelope_step();
+            self.pulse1_channel.quarter_frame_clock();
+            self.pulse2_channel.quarter_frame_clock();
+            self.triangle_channel.quarter_frame_clock();
+            self.noise_channel.quarter_frame_clock();
         }
 
         if self.half_cycle_count % 2 == 0 {
