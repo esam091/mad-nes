@@ -5,7 +5,9 @@ use sdl2::{
     AudioSubsystem,
 };
 
-use crate::log_apu;
+use bitflags::bitflags;
+
+use crate::{log_apu, log_ppu};
 
 /*
      |  0   1   2   3   4   5   6   7    8   9   A   B   C   D   E   F
@@ -82,8 +84,6 @@ impl Sweep {
     }
 }
 
-const PULSE_MAX_VOLUME: f32 = 0.05;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PulseType {
     Pulse1,
@@ -106,6 +106,8 @@ struct PulseChannel {
     restart_envelope: bool,
     sweep_clock: u8,
     current_volume: u8,
+
+    enabled: bool,
 }
 
 const DUTIES: [u8; 4] = [0b00000001, 0b00000011, 0b00001111, 0b11111100];
@@ -125,6 +127,18 @@ impl PulseChannel {
             sweep_clock: 0,
             pulse_type,
             restart_envelope: false,
+            enabled: false,
+        }
+    }
+
+    fn is_running(&self) -> bool {
+        self.length != 0
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length = 0;
         }
     }
 
@@ -143,13 +157,15 @@ impl PulseChannel {
     }
 
     fn set_length_counter_and_high_timer(&mut self, length_and_high: u8) {
-        let length_index = length_and_high.bitand(0b11111000).shr(3);
-        self.length = LENGTH_VALUES[length_index as usize];
+        if self.enabled {
+            let length_index = length_and_high.bitand(0b11111000).shr(3);
+            self.length = LENGTH_VALUES[length_index as usize];
+        }
 
         self.timer = self.low_timer as u16 | u16::from(length_and_high).bitand(0b111).shl(8);
         self.current_timer = self.timer;
         self.current_duty = 0;
-        self.restart_envelope;
+        self.restart_envelope = true;
     }
 
     fn step(&mut self) {
@@ -243,6 +259,7 @@ struct TriangleChannel {
     linear_counter_reload: bool,
 
     control_flag: bool,
+    enabled: bool,
 }
 
 impl TriangleChannel {
@@ -258,6 +275,18 @@ impl TriangleChannel {
             linear_counter: 0,
             linear_counter_reload: false,
             control_flag: false,
+            enabled: false,
+        }
+    }
+
+    fn is_running(&self) -> bool {
+        self.length != 0
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length = 0;
         }
     }
 
@@ -273,8 +302,10 @@ impl TriangleChannel {
         self.volume = 15;
         self.linear_counter_reload = true;
 
-        let length_index = value.bitand(0b11111000).shr(3);
-        self.length = LENGTH_VALUES[length_index as usize];
+        if self.enabled {
+            let length_index = value.bitand(0b11111000).shr(3);
+            self.length = LENGTH_VALUES[length_index as usize];
+        }
     }
 
     fn set_linear_counter_flag(&mut self, value: u8) {
@@ -351,6 +382,8 @@ struct NoiseChannel {
 
     length: u8,
     restart_envelope: bool,
+
+    enabled: bool,
 }
 
 const NOISE_PERIOD_TABLE: [u16; 16] = [
@@ -369,7 +402,19 @@ impl NoiseChannel {
             current_noise_timer: 0,
             length: 0,
             restart_envelope: false,
+            enabled: false,
         }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length = 0;
+        }
+    }
+
+    fn is_running(&self) -> bool {
+        self.length != 0
     }
 
     fn set_envelope_flag(&mut self, flag: u8) {
@@ -385,8 +430,10 @@ impl NoiseChannel {
     }
 
     fn set_length_counter(&mut self, flag: u8) {
-        let length_index = flag.bitand(0b11111000).shr(3);
-        self.length = LENGTH_VALUES[length_index as usize];
+        if self.enabled {
+            let length_index = flag.bitand(0b11111000).shr(3);
+            self.length = LENGTH_VALUES[length_index as usize];
+        }
         self.restart_envelope = true;
     }
 
@@ -660,5 +707,48 @@ impl Apu {
     pub fn write_triangle_linear_counter(&mut self, value: u8) {
         log_apu!("Write $4008: {:#04X}", value);
         self.triangle_channel.set_linear_counter_flag(value);
+    }
+
+    pub fn write_status(&mut self, value: u8) {
+        log_ppu!("Write $4015: {:#010b}", value);
+
+        let status = ApuStatus::from_bits(value).unwrap();
+        self.pulse1_channel
+            .set_enabled(status.contains(ApuStatus::PULSE_1));
+        self.pulse2_channel
+            .set_enabled(status.contains(ApuStatus::PULSE_2));
+        self.triangle_channel
+            .set_enabled(status.contains(ApuStatus::TRIANGLE));
+        self.noise_channel
+            .set_enabled(status.contains(ApuStatus::NOISE));
+
+        // TODO: handle DMC and frame interrupt
+    }
+
+    pub fn read_status(&self) -> u8 {
+        let mut status = ApuStatus::empty();
+
+        status.set(ApuStatus::PULSE_1, self.pulse1_channel.is_running());
+        status.set(ApuStatus::PULSE_2, self.pulse2_channel.is_running());
+        status.set(ApuStatus::TRIANGLE, self.triangle_channel.is_running());
+        status.set(ApuStatus::NOISE, self.noise_channel.is_running());
+
+        let bits = status.bits();
+        log_ppu!("Read $4015: {:#010b}", bits);
+
+        bits
+    }
+}
+
+bitflags! {
+    struct ApuStatus: u8 {
+        const DMC_INTERRUPT = 0b10000000;
+        const FRAME_INTERRUPT = 0b01000000;
+        const DMC = 0b00010000;
+        const NOISE = 0b00001000;
+        const TRIANGLE = 0b00000100;
+        const PULSE_2 = 0b00000010;
+        const PULSE_1 = 0b00000001;
+        const UNUSED = 0b00100000;
     }
 }

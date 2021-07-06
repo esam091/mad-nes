@@ -60,10 +60,11 @@ impl BusTrait for RealBus {
             0x2002 => self.ppu.read_status(),
             0x2004 => self.ppu.read_oam_data(),
             0x2007 => self.ppu.read_data(),
-            0x4000..=0x4013 | 0x4015 | 4017 => {
+            0x4017 => {
                 println!("APU Read {:#06X}", address);
                 self.memory[address as usize]
             }
+            0x4015 => self.apu.read_status(),
             0x4016 => {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
@@ -129,8 +130,9 @@ impl BusTrait for RealBus {
             0x400c => self.apu.write_noise_envelope(value),
             0x400e => self.apu.write_noise_mode_and_period(value),
             0x400f => self.apu.write_noise_length_counter(value),
+            0x4015 => self.apu.write_status(value),
 
-            0x4015 | 4017 => {
+            0x4017 => {
                 println!(
                     "APU Write {:#06X} = {:#04X} at {:?}",
                     address,
