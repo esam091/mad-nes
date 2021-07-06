@@ -153,7 +153,8 @@ impl PulseChannel {
     }
 
     fn set_low_timer(&mut self, timer: u8) {
-        self.low_timer = timer;
+        self.timer &= !0xff;
+        self.timer |= timer as u16;
     }
 
     fn set_length_counter_and_high_timer(&mut self, length_and_high: u8) {
@@ -162,7 +163,9 @@ impl PulseChannel {
             self.length = LENGTH_VALUES[length_index as usize];
         }
 
-        self.timer = self.low_timer as u16 | u16::from(length_and_high).bitand(0b111).shl(8);
+        self.timer &= 0xff;
+        self.timer |= u16::from(length_and_high).bitand(0b111).shl(8);
+
         self.current_timer = self.timer;
         self.current_duty = 0;
         self.restart_envelope = true;
@@ -222,7 +225,6 @@ impl PulseChannel {
         if self.timer < 8 || self.timer > 0x7ff || !self.sweep.enabled || self.sweep.shift == 0 {
             return;
         }
-
         if self.sweep_clock > 0 {
             self.sweep_clock -= 1;
         } else {
@@ -715,11 +717,7 @@ impl Apu {
     }
 
     pub fn write_pulse1_length_and_timer(&mut self, value: u8) {
-        log_apu!(
-            "Write $4003, timer: {:#04X}, length: {:#04X}",
-            value & 0b111,
-            (value >> 3) & 0b11111
-        );
+        log_apu!("Write $4003: {:#04X}", value);
 
         self.pulse1_channel.set_length_counter_and_high_timer(value);
     }
@@ -742,11 +740,7 @@ impl Apu {
     }
 
     pub fn write_pulse2_length_and_timer(&mut self, value: u8) {
-        log_apu!(
-            "Write $4007, timer: {:#04X}, length: {:#04X}",
-            value & 0b111,
-            (value >> 3) & 0b11111
-        );
+        log_apu!("Write $4007: {:#04X}", value);
 
         self.pulse2_channel.set_length_counter_and_high_timer(value);
     }
