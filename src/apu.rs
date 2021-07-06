@@ -7,7 +7,7 @@ use sdl2::{
 
 use bitflags::bitflags;
 
-use crate::{log_apu, log_ppu};
+use crate::log_apu;
 
 /*
      |  0   1   2   3   4   5   6   7    8   9   A   B   C   D   E   F
@@ -521,6 +521,78 @@ fn create_pulse_table() -> [f32; 31] {
     table
 }
 
+struct FrameCounter {
+    cpu_cycles: usize,
+    reset: bool,
+    mode_flag: bool,
+    irq_flag: bool,
+}
+
+const QUARTER_CYCLES: usize = 7457;
+
+impl FrameCounter {
+    fn new() -> FrameCounter {
+        FrameCounter {
+            cpu_cycles: 0,
+            reset: false,
+            mode_flag: false,
+            irq_flag: false,
+        }
+    }
+
+    fn step(&mut self) {
+        self.cpu_cycles += 1;
+        self.reset = false;
+    }
+
+    fn is_clocking_half_frame(&self) -> bool {
+        if self.reset {
+            return true;
+        }
+
+        if self.cpu_cycles % QUARTER_CYCLES == 0 {
+            if self.mode_flag {
+                let phase = self.get_quarter_blocks() % 5;
+
+                return phase == 1 || phase == 4;
+            } else {
+                return self.get_quarter_blocks() % 2 != 0;
+            }
+        }
+
+        false
+    }
+
+    fn get_quarter_blocks(&self) -> usize {
+        self.cpu_cycles / QUARTER_CYCLES
+    }
+
+    fn is_clocking_quarter_frame(&self) -> bool {
+        if self.reset {
+            return true;
+        }
+
+        if self.cpu_cycles % QUARTER_CYCLES == 0 {
+            if self.mode_flag {
+                let phase = self.get_quarter_blocks() % 5;
+
+                return phase != 3;
+            } else {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn set_flags(&mut self, value: u8) {
+        self.reset = true;
+        self.cpu_cycles = 0;
+        self.mode_flag = value & 0x80 != 0;
+        self.irq_flag = value & 0x40 != 0;
+    }
+}
+
 pub struct Apu {
     half_cycle_count: usize,
     pulse1_channel: PulseChannel,
@@ -535,6 +607,7 @@ pub struct Apu {
     buffer_index: usize,
     next_fill: usize,
     has_extra: bool,
+    frame_counter: FrameCounter,
 }
 
 impl Apu {
@@ -562,6 +635,7 @@ impl Apu {
             buffer_index: 0,
             next_fill: 40,
             has_extra: true,
+            frame_counter: FrameCounter::new(),
         }
     }
 
@@ -569,16 +643,14 @@ impl Apu {
         self.triangle_channel.step();
         // self.noise_channel.step(); // duck tales sounds more correct this way, gonna check later
 
-        // half frame
-        if self.half_cycle_count % 14913 == 0 {
+        if self.frame_counter.is_clocking_half_frame() {
             self.pulse1_channel.half_frame_clock();
             self.pulse2_channel.half_frame_clock();
             self.triangle_channel.half_frame_clock();
             self.noise_channel.half_frame_clock();
         }
 
-        // quarter frame
-        if self.half_cycle_count % 7457 == 0 {
+        if self.frame_counter.is_clocking_quarter_frame() {
             self.pulse1_channel.quarter_frame_clock();
             self.pulse2_channel.quarter_frame_clock();
             self.triangle_channel.quarter_frame_clock();
@@ -624,6 +696,7 @@ impl Apu {
         }
 
         self.half_cycle_count += 1;
+        self.frame_counter.step();
     }
 
     pub fn write_noise_envelope(&mut self, value: u8) {
@@ -710,7 +783,7 @@ impl Apu {
     }
 
     pub fn write_status(&mut self, value: u8) {
-        log_ppu!("Write $4015: {:#010b}", value);
+        log_apu!("Write $4015: {:#010b}", value);
 
         let status = ApuStatus::from_bits(value).unwrap();
         self.pulse1_channel
@@ -734,9 +807,15 @@ impl Apu {
         status.set(ApuStatus::NOISE, self.noise_channel.is_running());
 
         let bits = status.bits();
-        log_ppu!("Read $4015: {:#010b}", bits);
+        log_apu!("Read $4015: {:#010b}", bits);
 
         bits
+    }
+
+    pub fn write_frame_counter(&mut self, value: u8) {
+        log_apu!("Write $4017: {:#010b}", value);
+
+        self.frame_counter.set_flags(value);
     }
 }
 
