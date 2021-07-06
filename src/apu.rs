@@ -95,7 +95,6 @@ struct PulseChannel {
     sweep: Sweep,
     pulse_type: PulseType,
 
-    low_timer: u8,
     timer: u16,
     current_timer: u16,
     length: u8,
@@ -118,7 +117,6 @@ impl PulseChannel {
             envelope: Envelope::new(),
             sweep: Sweep::new(),
             timer: 0,
-            low_timer: 0,
             length: 0,
             current_duty: 0,
             current_timer: 0,
@@ -165,7 +163,6 @@ impl PulseChannel {
 
         self.timer &= 0xff;
         self.timer |= u16::from(length_and_high).bitand(0b111).shl(8);
-
         self.current_timer = self.timer;
         self.current_duty = 0;
         self.restart_envelope = true;
@@ -182,7 +179,7 @@ impl PulseChannel {
 
     fn get_current_volume(&self) -> u8 {
         if self.timer < 8
-            || self.timer > 0x7ff
+            || self.next_target_period() > 0x7ff
             || self.length == 0
             || DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) == 0
         {
@@ -222,26 +219,34 @@ impl PulseChannel {
     }
 
     fn sweep_step(&mut self) {
-        if self.timer < 8 || self.timer > 0x7ff || !self.sweep.enabled || self.sweep.shift == 0 {
+        let next_target_period = self.next_target_period();
+        if self.timer < 8
+            || self.next_target_period() > 0x7ff
+            || !self.sweep.enabled
+            || self.sweep.shift == 0
+        {
             return;
         }
         if self.sweep_clock > 0 {
             self.sweep_clock -= 1;
         } else {
-            let add = self.timer >> self.sweep.shift;
-            let extra = if self.pulse_type == PulseType::Pulse1 {
-                1
-            } else {
-                0
-            };
-            let target_timer = if self.sweep.negate {
-                self.timer - add - extra
-            } else {
-                self.timer + add
-            };
-
-            self.timer = target_timer;
+            self.timer = next_target_period;
             self.sweep_clock = self.sweep.period;
+        }
+    }
+
+    fn next_target_period(&self) -> u16 {
+        let add = self.timer >> self.sweep.shift;
+        let extra = if self.pulse_type == PulseType::Pulse1 {
+            1
+        } else {
+            0
+        };
+
+        if self.sweep.negate {
+            self.timer - add - extra
+        } else {
+            self.timer + add
         }
     }
 
