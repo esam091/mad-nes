@@ -13,6 +13,52 @@ pub trait Mapper {
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
 }
 
+struct CNROM {
+    chr_bank: usize,
+}
+
+impl CNROM {
+    fn new() -> CNROM {
+        CNROM { chr_bank: 0 }
+    }
+}
+
+impl Mapper for CNROM {
+    fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
+        if address >= 0x8000 {
+            self.chr_bank = value as usize & 3;
+        }
+    }
+
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        if prg_bank_size(prg_rom) == 2 || address < 0xc000 {
+            prg_rom[address as usize - 0x8000]
+        } else {
+            prg_rom[address as usize - 0xc000]
+        }
+    }
+
+    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
+        if chr_rom.is_empty() {
+            None
+        } else {
+            let start = self.chr_bank * 0x2000;
+            Some((
+                &chr_rom[start..start + 0x1000],
+                &chr_rom[start + 0x1000..start + 0x2000],
+            ))
+        }
+    }
+
+    fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
+        if chr_rom.is_empty() {
+            None
+        } else {
+            Some(chr_rom[self.chr_bank * 0x2000 + address as usize])
+        }
+    }
+}
+
 struct SNROM {
     shift_register: u8,
     control: u8,
@@ -240,6 +286,7 @@ pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Cartridge, RomParseE
         0 => Box::new(NROM {}),
         1 => Box::new(SNROM::new()),
         2 => Box::new(UNROM::new()),
+        3 => Box::new(CNROM::new()),
         _ => return Err(RomParseError::UnsupportedMapper(mapper_number)),
     };
 
