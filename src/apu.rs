@@ -254,6 +254,10 @@ impl PulseChannel {
             self.length -= 1;
         }
     }
+
+    fn reset(&mut self) {
+        self.restart_envelope = true;
+    }
 }
 
 struct TriangleChannel {
@@ -552,7 +556,7 @@ impl FrameCounter {
     }
 
     fn is_clocking_half_frame(&self) -> bool {
-        if self.reset {
+        if self.reset && self.mode_flag {
             return true;
         }
 
@@ -574,7 +578,7 @@ impl FrameCounter {
     }
 
     fn is_clocking_quarter_frame(&self) -> bool {
-        if self.reset {
+        if self.reset && self.mode_flag {
             return true;
         }
 
@@ -814,6 +818,8 @@ impl Apu {
         log_apu!("Write $4017: {:#010b}", value);
 
         self.frame_counter.set_flags(value);
+        self.pulse1_channel.reset();
+        self.pulse2_channel.reset();
     }
 }
 
