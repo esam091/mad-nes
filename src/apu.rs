@@ -1,4 +1,9 @@
-use std::ops::{BitAnd, Shl, Shr, ShrAssign};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::RefCell,
+    ops::{BitAnd, Shl, Shr, ShrAssign},
+    rc::Rc,
+};
 
 use sdl2::{
     audio::{AudioQueue, AudioSpecDesired},
@@ -7,7 +12,7 @@ use sdl2::{
 
 use bitflags::bitflags;
 
-use crate::log_apu;
+use crate::{ines::Cartridge, log_apu};
 
 /*
      |  0   1   2   3   4   5   6   7    8   9   A   B   C   D   E   F
@@ -70,8 +75,8 @@ impl Sweep {
     }
 
     fn from_flags(flag: u8) -> Sweep {
-        let enabled = flag & 0x80 != 0;
         let shift = flag & 0b111;
+        let enabled = flag & 0x80 != 0 && shift != 0;
         let negate = flag & 0b1000 != 0;
         let period = flag.bitand(0b01110000).shr(4);
 
@@ -104,6 +109,7 @@ struct PulseChannel {
     envelope_clock: u8,
     restart_envelope: bool,
     sweep_clock: u8,
+    restart_sweep: bool,
     current_volume: u8,
 
     enabled: bool,
@@ -126,6 +132,7 @@ impl PulseChannel {
             pulse_type,
             restart_envelope: false,
             enabled: false,
+            restart_sweep: true,
         }
     }
 
@@ -146,7 +153,7 @@ impl PulseChannel {
 
     fn set_sweep_flag(&mut self, flag: u8) {
         self.sweep = Sweep::from_flags(flag);
-        self.sweep_clock = self.sweep.period;
+        self.restart_sweep = true;
     }
 
     fn set_low_timer(&mut self, timer: u8) {
@@ -178,7 +185,7 @@ impl PulseChannel {
 
     fn get_current_volume(&self) -> u8 {
         if self.timer < 8
-            || self.next_target_period() > 0x7ff
+            || (!self.sweep.negate && self.next_target_period() > 0x7ff)
             || self.length == 0
             || DUTIES[self.envelope.duty as usize] & (1 << self.current_duty) == 0
         {
@@ -218,17 +225,19 @@ impl PulseChannel {
     }
 
     fn sweep_step(&mut self) {
-        let next_target_period = self.next_target_period();
-        if self.timer < 8
-            || self.next_target_period() > 0x7ff
-            || !self.sweep.enabled
-            || self.sweep.shift == 0
-        {
-            return;
+        if self.restart_sweep {
+            self.sweep_clock = self.sweep.period;
+            self.restart_sweep = false;
         }
+
+        let next_target_period = self.next_target_period();
+
         if self.sweep_clock > 0 {
             self.sweep_clock -= 1;
-        } else {
+        } else if self.sweep.enabled
+            && self.timer >= 8
+            && !(!self.sweep.negate && next_target_period > 0x7ff)
+        {
             self.timer = next_target_period;
             self.sweep_clock = self.sweep.period;
         }
@@ -256,7 +265,7 @@ impl PulseChannel {
     }
 
     fn reset(&mut self) {
-        self.restart_envelope = true;
+        // self.restart_envelope = true;
     }
 }
 
@@ -411,7 +420,7 @@ impl NoiseChannel {
             shift_register: 1,
             current_volume: 0,
             mode_flag: false,
-            noise_period: 0,
+            noise_period: 2,
             envelope: Envelope::new(),
             envelope_clock: 0,
             current_noise_timer: 0,
@@ -440,7 +449,7 @@ impl NoiseChannel {
         self.mode_flag = flag & 0x80 != 0;
 
         let noise_period_index = flag & 0b1111;
-        self.noise_period = NOISE_PERIOD_TABLE[noise_period_index as usize];
+        self.noise_period = NOISE_PERIOD_TABLE[noise_period_index as usize] / 2;
         self.current_noise_timer = self.noise_period;
     }
 
@@ -480,6 +489,7 @@ impl NoiseChannel {
         if self.restart_envelope {
             self.envelope_clock = self.envelope.volume;
             self.current_volume = 15;
+            self.restart_envelope = false;
             return;
         }
 
@@ -603,12 +613,147 @@ impl FrameCounter {
     }
 }
 
+const DMC_RATE_TABLE: [u16; 16] = [
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
+];
+struct DmcChannel {
+    sample_buffer: Option<u8>,
+    rate: u16,
+    current_timer: u16,
+
+    silence: bool,
+    bits_left: u8,
+    shift_register: u8,
+
+    current_output: u8,
+    sample_address: u16,
+    current_address: u16,
+    sample_length: u16,
+    current_length: u16,
+
+    loops_playback: bool,
+    irq_enabled: bool,
+
+    cartridge: Option<Rc<RefCell<Cartridge>>>,
+}
+
+impl DmcChannel {
+    fn new() -> DmcChannel {
+        DmcChannel {
+            sample_buffer: None,
+            rate: DMC_RATE_TABLE[0] / 2,
+            silence: true,
+            bits_left: 0,
+            current_timer: 0,
+            shift_register: 0,
+            current_output: 0,
+            current_length: 0,
+            sample_address: 0,
+            sample_length: 0,
+            loops_playback: false,
+            irq_enabled: false,
+            cartridge: None,
+            current_address: 0,
+        }
+    }
+
+    fn set_direct_load(&mut self, value: u8) {
+        self.current_output = value & 127;
+    }
+
+    fn step(&mut self) {
+        if self.current_timer > 0 {
+            self.current_timer -= 1;
+        } else {
+            self.current_timer = self.rate;
+
+            if !self.silence {
+                if self.shift_register & 1 != 0 && self.current_output < 126 {
+                    self.current_output += 2;
+                } else {
+                    self.current_output = self.current_output.saturating_sub(2);
+                }
+            }
+
+            self.bits_left -= 1;
+            self.shift_register >>= 1;
+
+            if self.bits_left == 0 {
+                self.bits_left = 8;
+                self.shift_register = self.sample_buffer.unwrap_or(0);
+                self.silence = self.sample_buffer == None;
+                self.sample_buffer = None;
+            }
+
+            if self.current_length > 0 && self.sample_buffer == None {
+                match self.cartridge.as_mut() {
+                    Some(cartridge) => {
+                        let cartridge = cartridge.as_ref();
+                        let value = cartridge.borrow_mut().read_address(self.current_address) & 127;
+                        self.sample_buffer = Some(value);
+                    }
+                    _ => {
+                        todo!()
+                    }
+                }
+
+                self.current_address = self.current_address.wrapping_add(1) | 0x8000;
+                self.current_length -= 1;
+
+                if self.current_length == 0 {
+                    if self.loops_playback {
+                        self.current_length = self.sample_length;
+                        self.current_address = self.sample_address;
+                    }
+                } // todo: handle IRQ
+            }
+        }
+    }
+
+    fn set_sample_address(&mut self, value: u8) {
+        self.sample_address = 0xc000 | value as u16 * 0x40;
+        // dbg!(self.sample_address);
+    }
+
+    fn set_sample_length(&mut self, value: u8) {
+        self.sample_length = value as u16 * 0x10 + 1;
+        // dbg!(self.sample_length);
+    }
+
+    fn set_settings(&mut self, value: u8) {
+        let rate_index = value & 0b1111;
+        self.rate = DMC_RATE_TABLE[rate_index as usize] / 2;
+        self.loops_playback = value & 0b01000000 != 0;
+        self.irq_enabled = value & 0b10000000 != 0;
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        if enabled {
+            if self.current_length == 0 {
+                self.current_length = self.sample_length;
+                self.current_address = self.sample_address;
+            }
+        } else {
+            self.current_length = 0;
+        }
+    }
+
+    fn set_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+        self.cartridge = Some(cartridge);
+    }
+
+    fn get_current_volume(&self) -> u8 {
+        self.current_output
+    }
+}
+
 pub struct Apu {
     half_cycle_count: usize,
     pulse1_channel: PulseChannel,
     pulse2_channel: PulseChannel,
     triangle_channel: TriangleChannel,
     noise_channel: NoiseChannel,
+    dmc_channel: DmcChannel,
     tnd_table: [f32; 203],
     pulse_table: [f32; 31],
     output_queue: AudioQueue<f32>,
@@ -646,12 +791,12 @@ impl Apu {
             next_fill: 40,
             has_extra: true,
             frame_counter: FrameCounter::new(),
+            dmc_channel: DmcChannel::new(),
         }
     }
 
     pub fn half_step(&mut self) {
         self.triangle_channel.step();
-        // self.noise_channel.step(); // duck tales sounds more correct this way, gonna check later
 
         if self.frame_counter.is_clocking_half_frame() {
             self.pulse1_channel.half_frame_clock();
@@ -671,6 +816,7 @@ impl Apu {
             self.pulse1_channel.step();
             self.pulse2_channel.step();
             self.noise_channel.step();
+            self.dmc_channel.step();
         }
 
         if self.half_cycle_count % self.next_fill == 0 {
@@ -688,7 +834,8 @@ impl Apu {
             let noise = self.noise_channel.get_current_volume() as usize;
             // let noise = 0;
 
-            let dmc = 0;
+            let dmc = self.dmc_channel.get_current_volume() as usize;
+            // let dmc = 0;
 
             let tnd_out = self.tnd_table[3 * triangle + 2 * noise + dmc];
 
@@ -796,8 +943,9 @@ impl Apu {
             .set_enabled(status.contains(ApuStatus::TRIANGLE));
         self.noise_channel
             .set_enabled(status.contains(ApuStatus::NOISE));
-
-        // TODO: handle DMC and frame interrupt
+        self.dmc_channel
+            .set_enabled(status.contains(ApuStatus::DMC));
+        // TODO: handleframe interrupt
     }
 
     pub fn read_status(&self) -> u8 {
@@ -820,6 +968,30 @@ impl Apu {
         self.frame_counter.set_flags(value);
         self.pulse1_channel.reset();
         self.pulse2_channel.reset();
+    }
+
+    pub fn write_dmc_settings(&mut self, value: u8) {
+        log_apu!("Write $4010: {:#010b}", value);
+        self.dmc_channel.set_settings(value);
+    }
+
+    pub fn write_dmc_direct_load(&mut self, value: u8) {
+        log_apu!("Write $4011: {:#04X}", value);
+        self.dmc_channel.set_direct_load(value);
+    }
+
+    pub fn write_dmc_sample_address(&mut self, value: u8) {
+        log_apu!("Write $4012: {:#04X}", value);
+        self.dmc_channel.set_sample_address(value);
+    }
+
+    pub fn write_dmc_sample_length(&mut self, value: u8) {
+        log_apu!("Write $4013: {:#04X}", value);
+        self.dmc_channel.set_sample_length(value);
+    }
+
+    pub fn set_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+        self.dmc_channel.set_cartridge(cartridge);
     }
 }
 

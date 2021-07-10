@@ -69,13 +69,13 @@ impl BusTrait for RealBus {
                 let value: u8 = match self.joypad_state {
                     JoypadState::Ready(button) => {
                         if self.active_buttons.contains(&button) {
-                            1
+                            0x41
                         } else {
-                            0
+                            0x40
                         }
                     }
-                    JoypadState::Polling => 0,
-                    JoypadState::Idle => 1,
+                    JoypadState::Polling => 0x40,
+                    JoypadState::Idle => 0x41,
                 };
 
                 let next_state = match self.joypad_state {
@@ -130,6 +130,10 @@ impl BusTrait for RealBus {
             0x400c => self.apu.write_noise_envelope(value),
             0x400e => self.apu.write_noise_mode_and_period(value),
             0x400f => self.apu.write_noise_length_counter(value),
+            0x4010 => self.apu.write_dmc_settings(value),
+            0x4011 => self.apu.write_dmc_direct_load(value),
+            0x4012 => self.apu.write_dmc_sample_address(value),
+            0x4013 => self.apu.write_dmc_sample_length(value),
             0x4015 => self.apu.write_status(value),
             0x4017 => self.apu.write_frame_counter(value),
             0x4014 => {

@@ -21,10 +21,12 @@ pub struct Machine {
 }
 
 impl Machine {
-    pub fn load(file_path: &String, apu: Apu) -> Result<Machine, std::io::Error> {
+    pub fn load(file_path: &String, mut apu: Apu) -> Result<Machine, std::io::Error> {
         // todo: fix error type
         let cartridge = load_cartridge(file_path).ok().unwrap();
         let cartridge = Rc::new(RefCell::new(cartridge));
+
+        apu.set_cartridge(cartridge.clone());
 
         let mirroring = cartridge.borrow().mirroring();
         let bus = RealBus {
