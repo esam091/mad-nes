@@ -270,12 +270,8 @@ impl PulseChannel {
 }
 
 struct TriangleChannel {
-    increment: i16,
     timer: u16,
     current_timer: u16,
-
-    volume: u8,
-    low_timer: u8,
 
     length: u8,
     current_linear_counter: u8,
@@ -284,16 +280,15 @@ struct TriangleChannel {
 
     control_flag: bool,
     enabled: bool,
+    tri_step: u8,
 }
 
 impl TriangleChannel {
     fn new() -> TriangleChannel {
         TriangleChannel {
-            increment: 0,
+            tri_step: 0,
             timer: 0,
             current_timer: 0,
-            low_timer: 0,
-            volume: 0,
             length: 0,
             current_linear_counter: 0,
             linear_counter: 0,
@@ -315,15 +310,14 @@ impl TriangleChannel {
     }
 
     fn set_low_timer(&mut self, value: u8) {
-        self.low_timer = value;
+        self.timer &= 0xff00;
+        self.timer |= value as u16;
     }
 
     fn set_length_counter_and_high_timer(&mut self, value: u8) {
-        let timer = self.low_timer as u16 | u16::from(value).bitand(0b111).shl(8);
-        self.timer = timer;
-        self.current_timer = timer;
-        self.increment = -1;
-        self.volume = 15;
+        self.timer &= 0xff;
+        self.timer |= u16::from(value).bitand(0b111).shl(8);
+        self.current_timer = self.timer;
         self.linear_counter_reload = true;
 
         if self.enabled {
@@ -338,41 +332,31 @@ impl TriangleChannel {
     }
 
     fn step(&mut self) {
-        if self.timer == 0 {
-            return;
+        let mut clock_triunit = true;
+        if self.length == 0
+            || self.current_linear_counter == 0
+            || (self.timer < 2 && self.current_timer == 0)
+        {
+            clock_triunit = false;
         }
 
-        if self.current_timer > 0 {
-            self.current_timer -= 1;
-        } else {
-            self.current_timer = self.timer;
-            if self.volume > 0 && self.increment < 0 {
-                self.volume -= 1;
-            } else if self.volume < 15 && self.increment > 0 {
-                self.volume += 1;
-            }
-
-            if self.volume == 0 {
-                if self.increment < 0 {
-                    self.increment = 0;
-                } else {
-                    self.increment = 1;
-                }
-            } else if self.volume == 15 {
-                if self.increment > 0 {
-                    self.increment = 0;
-                } else {
-                    self.increment = -1;
-                }
+        if clock_triunit {
+            if self.current_timer > 0 {
+                self.current_timer -= 1;
+            } else {
+                self.current_timer = self.timer;
+                self.tri_step = (self.tri_step + 1) & 0x1f;
             }
         }
     }
 
     fn get_current_volume(&self) -> u8 {
-        if self.length == 0 || self.current_linear_counter == 0 {
-            0
+        if self.timer < 2 && self.current_timer == 0 {
+            7
+        } else if self.tri_step & 0x10 != 0 {
+            self.tri_step ^ 0x1f
         } else {
-            self.volume
+            self.tri_step
         }
     }
 
@@ -659,6 +643,10 @@ impl DmcChannel {
 
     fn set_direct_load(&mut self, value: u8) {
         self.current_output = value & 127;
+    }
+
+    fn is_running(&self) -> bool {
+        self.current_length != 0
     }
 
     fn step(&mut self) {
@@ -955,6 +943,7 @@ impl Apu {
         status.set(ApuStatus::PULSE_2, self.pulse2_channel.is_running());
         status.set(ApuStatus::TRIANGLE, self.triangle_channel.is_running());
         status.set(ApuStatus::NOISE, self.noise_channel.is_running());
+        status.set(ApuStatus::DMC, self.dmc_channel.is_running());
 
         let bits = status.bits();
         log_apu!("Read $4015: {:#010b}", bits);
