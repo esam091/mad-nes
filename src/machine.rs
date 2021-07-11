@@ -49,7 +49,7 @@ impl Machine {
     pub fn step(&mut self) -> Option<SideEffect> {
         if self.pending_cycles == 0 {
             let result = self.cpu.step();
-            let cycles = result.cycles_elapsed + result.has_dma as u32 * 514;
+            let cycles = result.cycles_elapsed;
             self.pending_cycles = cycles;
         }
 
