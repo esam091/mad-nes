@@ -11,6 +11,7 @@ pub trait Mapper {
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
     fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
+    fn mirroring(&self) -> Option<Mirroring>;
 }
 
 struct CNROM {
@@ -56,6 +57,10 @@ impl Mapper for CNROM {
         } else {
             Some(chr_rom[self.chr_bank * 0x2000 + address as usize])
         }
+    }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
     }
 }
 
@@ -145,6 +150,16 @@ impl Mapper for SNROM {
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         None
     }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        match self.control & 0b11 {
+            2 => Some(Mirroring::Vertical),
+            3 => Some(Mirroring::Horizontal),
+            0 => Some(Mirroring::ONESCREEN_LOW),
+            1 => Some(Mirroring::ONESCREEN_HIGH),
+            _ => panic!("Unsupported mirror: {:#04X}", self.control),
+        }
+    }
 }
 
 struct NROM;
@@ -180,6 +195,10 @@ impl Mapper for NROM {
         } else {
             None
         }
+    }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
     }
 }
 
@@ -219,6 +238,10 @@ impl Mapper for UNROM {
     fn read_chr_rom(&self, _chr_rom: &[u8], _address: u16) -> Option<u8> {
         None
     }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
+    }
 }
 
 pub struct Cartridge {
@@ -246,7 +269,7 @@ impl Cartridge {
     }
 
     pub fn mirroring(&self) -> Mirroring {
-        self.mirroring
+        self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 }
 

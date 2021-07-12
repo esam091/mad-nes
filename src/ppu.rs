@@ -131,6 +131,19 @@ pub enum ScanlineEffect {
 pub enum Mirroring {
     Horizontal,
     Vertical,
+    ONESCREEN_LOW,
+    ONESCREEN_HIGH,
+}
+
+impl Mirroring {
+    fn real_address(&self, address: u16) -> u16 {
+        match self {
+            Mirroring::Vertical => (address & 0x23ff) | (address & 0x400),
+            Mirroring::Horizontal => (address & 0x23ff) | (address & 0x800),
+            Mirroring::ONESCREEN_LOW => address & 0x23ff,
+            &Mirroring::ONESCREEN_HIGH => (address & 0x23ff) | 0x400,
+        }
+    }
 }
 
 pub struct Ppu {
@@ -154,7 +167,6 @@ pub struct Ppu {
     current_fine_x: u8,
 
     frame_buffer: [[u8; 256]; 240],
-    mirroring: Mirroring,
 
     cartridge: Rc<RefCell<Cartridge>>,
 }
@@ -199,7 +211,7 @@ fn map_mirror(address: u16) -> u16 {
 }
 
 impl Ppu {
-    pub fn new(mirroring: Mirroring, cartridge: Rc<RefCell<Cartridge>>) -> Ppu {
+    pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Ppu {
         Ppu {
             memory: [0; 0x4000],
             write_latch: WriteLatch::Zero,
@@ -221,7 +233,7 @@ impl Ppu {
             current_scanline: 261,
             current_dot: 0,
             current_fine_x: 0,
-            mirroring,
+
             cartridge,
         }
     }
@@ -316,6 +328,11 @@ impl Ppu {
                     .read_chr_rom(real_address)
                     .unwrap_or(self.memory[real_address as usize])
             } else {
+                let real_address = self
+                    .cartridge
+                    .borrow()
+                    .mirroring()
+                    .real_address(real_address);
                 self.memory[real_address as usize]
             };
 
@@ -345,12 +362,12 @@ impl Ppu {
         }
 
         if real_address < 0x3f00 && real_address >= 0x2000 {
-            let xor = match self.mirroring {
-                Mirroring::Horizontal => 0x400,
-                Mirroring::Vertical => 0x800,
-            };
-
-            self.memory[real_address as usize ^ xor] = data;
+            let real_address = self
+                .cartridge
+                .borrow()
+                .mirroring()
+                .real_address(real_address);
+            self.memory[real_address as usize] = data;
         }
 
         self.v = self.v.wrapping_add(self.control.address_increment());
@@ -556,6 +573,11 @@ impl Ppu {
                     let fine_y = (self.v & 0x7000) >> 12;
                     // render
                     let tile_address = 0x2000 | (self.v & 0xfff);
+                    let tile_address = self
+                        .cartridge
+                        .borrow()
+                        .mirroring()
+                        .real_address(tile_address);
 
                     let coarse_x = self.v & 0b11111;
                     let coarse_y = (self.v >> 5) & 0b11111;

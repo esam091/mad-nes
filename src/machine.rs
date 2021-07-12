@@ -28,12 +28,11 @@ impl Machine {
 
         apu.set_cartridge(cartridge.clone());
 
-        let mirroring = cartridge.borrow().mirroring();
         let bus = RealBus {
             memory: [0; 0x10000],
             active_buttons: HashSet::new(),
             joypad_state: JoypadState::Idle,
-            ppu: Ppu::new(mirroring, cartridge.clone()),
+            ppu: Ppu::new(cartridge.clone()),
             cartridge,
             apu,
         };
