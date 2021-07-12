@@ -587,6 +587,12 @@ impl Ppu {
                         | (self.v & 0x0C00)
                         | ((self.v >> 4) & 0x38)
                         | ((self.v >> 2) & 0x07);
+                    let attribute_address = self
+                        .cartridge
+                        .borrow()
+                        .mirroring()
+                        .real_address(attribute_address);
+
                     let attribute_value = self.memory[attribute_address as usize];
                     let subtile_y = (coarse_y % 4) / 2;
                     let subtile_x = (coarse_x % 4) / 2;
