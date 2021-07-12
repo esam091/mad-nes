@@ -811,4 +811,20 @@ impl Ppu {
     pub fn is_sprite_rendering_enabled(&self) -> bool {
         self.mask.contains(PpuMask::SHOW_SPRITES)
     }
+
+    pub fn top_left_nametable_address(&self) -> u16 {
+        self.cartridge.borrow().mirroring().real_address(0x2000)
+    }
+
+    pub fn top_right_nametable_address(&self) -> u16 {
+        self.cartridge.borrow().mirroring().real_address(0x2400)
+    }
+
+    pub fn bottom_left_nametable_address(&self) -> u16 {
+        self.cartridge.borrow().mirroring().real_address(0x2800)
+    }
+
+    pub fn bottom_right_nametable_address(&self) -> u16 {
+        self.cartridge.borrow().mirroring().real_address(0x2c00)
+    }
 }
