@@ -89,6 +89,7 @@ impl Mapper for SNROM {
         println!("Write MMC1: {:#010b} at {:#06X}", value, address);
         if value & 0x80 != 0 {
             self.shift_register = 0b10000;
+            self.control = 0xc;
             return;
         }
 
