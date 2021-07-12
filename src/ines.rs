@@ -112,12 +112,8 @@ impl Mapper for SNROM {
                 0x8000..=0x9fff => self.control = value,
                 0xa000..=0xbfff => self.chr_bank_0 = value,
                 0xc000..=0xdfff => self.chr_bank_1 = value,
-                0xe000..=0xffff => {
-                    self.prg_bank = value & 0b1111;
-                    if (self.control & 0b1100) >> 2 <= 1 {
-                        self.prg_bank &= !1;
-                    }
-                }
+                0xe000..=0xffff => self.prg_bank = value & 0b1111,
+
                 _ => panic!("Unhandled address: {:#06X}", address),
             }
         }
@@ -133,9 +129,9 @@ impl Mapper for SNROM {
         let bank_size = prg_bank_size(prg_rom);
 
         match (self.control & 0b1100) >> 2 {
-            0 | 1 => prg_rom[address as usize - 0x8000],
+            0 | 1 => prg_rom[address as usize - 0x8000 + (self.prg_bank as usize & !1) * 0x8000],
             2 => match address {
-                0x8000..=0xbfff => prg_rom[address as usize - 0x8000 + (bank_size - 1) * 0x4000],
+                0x8000..=0xbfff => prg_rom[address as usize - 0x8000],
                 0xc000..=0xffff => {
                     prg_rom[address as usize - 0xc000 + self.prg_bank as usize * 0x4000]
                 }
@@ -178,7 +174,10 @@ impl Mapper for SNROM {
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
-        None
+        if chr_rom.is_empty() {
+            return None;
+        }
+        todo!()
     }
 
     fn mirroring(&self) -> Option<Mirroring> {
