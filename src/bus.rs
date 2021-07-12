@@ -96,7 +96,7 @@ impl BusTrait for RealBus {
 
                 return value;
             }
-            0x6000..=0xffff => self.cartridge.borrow_mut().read_address(address),
+            0x8000..=0xffff => self.cartridge.borrow_mut().read_address(address),
             _ => self.memory[address as usize],
         }
     }
@@ -153,7 +153,7 @@ impl BusTrait for RealBus {
                     self.joypad_state, value
                 ),
             },
-            0x6000..=0xffff => self.cartridge.borrow_mut().write_address(address, value),
+            0x8000..=0xffff => self.cartridge.borrow_mut().write_address(address, value),
             _ => self.memory[address as usize] = value,
         }
 

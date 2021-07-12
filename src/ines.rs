@@ -93,7 +93,7 @@ impl Mapper for SNROM {
             return;
         }
 
-        println!("Write MMC1: {:#010b} at {:#06X}", value, address);
+        // println!("Write MMC1: {:#010b} at {:#06X}", value, address);
         if value & 0x80 != 0 {
             self.shift_register = 0b10000;
             self.control = 0xc;
@@ -166,8 +166,8 @@ impl Mapper for SNROM {
         match self.control & 0b11 {
             2 => Some(Mirroring::Vertical),
             3 => Some(Mirroring::Horizontal),
-            0 => Some(Mirroring::ONESCREEN_LOW),
-            1 => Some(Mirroring::ONESCREEN_HIGH),
+            0 => Some(Mirroring::OneScreenLow),
+            1 => Some(Mirroring::OneScreenHigh),
             _ => panic!("Unsupported mirror: {:#04X}", self.control),
         }
     }

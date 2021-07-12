@@ -131,8 +131,8 @@ pub enum ScanlineEffect {
 pub enum Mirroring {
     Horizontal,
     Vertical,
-    ONESCREEN_LOW,
-    ONESCREEN_HIGH,
+    OneScreenLow,
+    OneScreenHigh,
 }
 
 impl Mirroring {
@@ -140,8 +140,8 @@ impl Mirroring {
         match self {
             Mirroring::Vertical => (address & 0x23ff) | (address & 0x400),
             Mirroring::Horizontal => (address & 0x23ff) | (address & 0x800),
-            Mirroring::ONESCREEN_LOW => address & 0x23ff,
-            &Mirroring::ONESCREEN_HIGH => (address & 0x23ff) | 0x400,
+            Mirroring::OneScreenLow => address & 0x23ff,
+            Mirroring::OneScreenHigh => (address & 0x23ff) | 0x400,
         }
     }
 }
