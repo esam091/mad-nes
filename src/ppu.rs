@@ -139,7 +139,7 @@ impl Mirroring {
     fn real_address(&self, address: u16) -> u16 {
         match self {
             Mirroring::Vertical => (address & 0x23ff) | (address & 0x400),
-            Mirroring::Horizontal => ((address / 2) & 0x400) + (address % 0x400) + 0x2000,
+            Mirroring::Horizontal => (address & 0x23ff) | ((address / 2) & 0x400),
             Mirroring::OneScreenLow => address & 0x23ff,
             Mirroring::OneScreenHigh => (address & 0x23ff) | 0x400,
         }
