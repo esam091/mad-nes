@@ -70,6 +70,7 @@ struct SNROM {
     chr_bank_0: u8,
     chr_bank_1: u8,
     prg_bank: u8,
+    prg_ram: [u8; 0x2000],
 }
 
 impl SNROM {
@@ -80,14 +81,15 @@ impl SNROM {
             chr_bank_0: 0,
             chr_bank_1: 0,
             prg_bank: 0,
+            prg_ram: [0; 0x2000],
         }
     }
 }
 
 impl Mapper for SNROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
-        if address < 0x8000 {
-            // TODO: handle PRG RAM writes
+        if address >= 0x6000 && address < 0x8000 {
+            self.prg_ram[address as usize - 0x6000] = value;
             return;
         }
 
@@ -107,7 +109,6 @@ impl Mapper for SNROM {
             self.shift_register = 0b10000;
 
             match address {
-                0x6000..=0x7fff => {} //TODO
                 0x8000..=0x9fff => self.control = value,
                 0xa000..=0xbfff => self.chr_bank_0 = value,
                 0xc000..=0xdfff => self.chr_bank_1 = value,
@@ -123,6 +124,9 @@ impl Mapper for SNROM {
     }
 
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        if address >= 0x6000 && address < 0x8000 {
+            return self.prg_ram[address as usize - 0x6000];
+        }
         // (0, 1: switch 32 KB at $8000, ignoring low bit of bank number;
         //     2: fix first bank at $8000 and switch 16 KB bank at $C000;
         //     3: fix last bank at $C000 and switch 16 KB bank at $8000)
@@ -130,6 +134,13 @@ impl Mapper for SNROM {
 
         match (self.control & 0b1100) >> 2 {
             0 | 1 => prg_rom[address as usize - 0x8000],
+            2 => match address {
+                0x8000..=0xbfff => prg_rom[address as usize - 0x8000 + (bank_size - 1) * 0x4000],
+                0xc000..=0xffff => {
+                    prg_rom[address as usize - 0xc000 + self.prg_bank as usize * 0x4000]
+                }
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
             3 => match address {
                 0x8000..=0xbfff => {
                     prg_rom[address as usize - 0x8000 + self.prg_bank as usize * 0x4000]
@@ -137,7 +148,7 @@ impl Mapper for SNROM {
                 0xc000..=0xffff => prg_rom[address as usize - 0xc000 + (bank_size - 1) * 0x4000],
                 _ => panic!("Unhandled address: {:#06X}", address),
             },
-            _ => todo!("prg read control"),
+            _ => todo!("prg read control: {:#07b}", self.control),
         }
     }
 
