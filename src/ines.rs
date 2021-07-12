@@ -153,9 +153,28 @@ impl Mapper for SNROM {
     }
 
     fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        // todo!()
-        // dbg!(chr_rom.len());
-        None
+        if chr_rom.is_empty() {
+            return None;
+        }
+
+        if self.control & 0b10000 != 0 {
+            // the reference says ignore bit 0, but bit 0 is what makes Castlevania II work
+            let bank_number = self.chr_bank_0 as usize;
+            let address = bank_number * 0x1000;
+
+            Some((
+                &chr_rom[address..address + 0x1000],
+                &chr_rom[address + 0x1000..address + 0x2000],
+            ))
+        } else {
+            let bank1 = self.chr_bank_0 as usize * 0x1000;
+            let bank2 = self.chr_bank_1 as usize * 0x1000;
+
+            Some((
+                &chr_rom[bank1..bank1 + 0x1000],
+                &chr_rom[bank2..bank2 + 0x1000],
+            ))
+        }
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
