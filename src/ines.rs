@@ -11,6 +11,7 @@ pub trait Mapper {
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
     fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
+    fn mirroring(&self) -> Option<Mirroring>;
 }
 
 struct CNROM {
@@ -57,6 +58,10 @@ impl Mapper for CNROM {
             Some(chr_rom[self.chr_bank * 0x2000 + address as usize])
         }
     }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
+    }
 }
 
 struct SNROM {
@@ -65,30 +70,48 @@ struct SNROM {
     chr_bank_0: u8,
     chr_bank_1: u8,
     prg_bank: u8,
+    prg_ram: [u8; 0x2000],
 }
 
 impl SNROM {
     fn new() -> SNROM {
         SNROM {
             shift_register: 0b10000,
-            control: 0,
+            control: 0b01100,
             chr_bank_0: 0,
             chr_bank_1: 0,
             prg_bank: 0,
+            prg_ram: [0; 0x2000],
         }
+    }
+
+    fn bank_addresses(&self) -> (usize, usize) {
+        let bank1: usize;
+        let bank2: usize;
+
+        if self.control & 0b10000 == 0 {
+            bank1 = (self.chr_bank_0 as usize & !1) * 0x1000;
+            bank2 = bank1 + 0x1000;
+        } else {
+            bank1 = self.chr_bank_0 as usize * 0x1000;
+            bank2 = self.chr_bank_1 as usize * 0x1000;
+        }
+
+        (bank1, bank2)
     }
 }
 
 impl Mapper for SNROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
-        if address < 0x8000 {
-            // TODO: handle PRG RAM writes
+        if address >= 0x6000 && address < 0x8000 {
+            self.prg_ram[address as usize - 0x6000] = value;
             return;
         }
 
-        println!("Write MMC1: {:#010b} at {:#06X}", value, address);
+        // println!("Write MMC1: {:#010b} at {:#06X}", value, address);
         if value & 0x80 != 0 {
             self.shift_register = 0b10000;
+            self.control |= 0xc;
             return;
         }
 
@@ -96,34 +119,43 @@ impl Mapper for SNROM {
         if self.shift_register & 1 == 0 {
             self.shift_register = value;
         } else {
-            println!("MMC1 value: {:#07b}, at: {:#06X}", value, address);
+            // println!("MMC1 value: {:#07b}, at: {:#06X}", value, address);
 
             self.shift_register = 0b10000;
 
             match address {
-                0x6000..=0x7fff => {} //TODO
                 0x8000..=0x9fff => self.control = value,
                 0xa000..=0xbfff => self.chr_bank_0 = value,
                 0xc000..=0xdfff => self.chr_bank_1 = value,
-                0xe000..=0xffff => {
-                    self.prg_bank = value & 0b1111;
-                    if (self.control & 0b1100) >> 2 <= 1 {
-                        self.prg_bank &= !1;
-                    }
-                }
+                0xe000..=0xffff => self.prg_bank = value & 0b1111,
+
                 _ => panic!("Unhandled address: {:#06X}", address),
             }
         }
     }
 
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
-        // (0, 1: switch 32 KB at $8000, ignoring low bit of bank number;
-        //     2: fix first bank at $8000 and switch 16 KB bank at $C000;
-        //     3: fix last bank at $C000 and switch 16 KB bank at $8000)
+        if address >= 0x6000 && address < 0x8000 {
+            // println!("prg read at {:#06X}", address);
+            return self.prg_ram[address as usize - 0x6000];
+        }
+
         let bank_size = prg_bank_size(prg_rom);
 
         match (self.control & 0b1100) >> 2 {
-            0 | 1 => prg_rom[address as usize - 0x8000],
+            0 | 1 => match address {
+                0x8000..=0xffff => {
+                    prg_rom[address as usize - 0x8000 + (self.prg_bank as usize & !1) * 0x4000]
+                }
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
+            2 => match address {
+                0x8000..=0xbfff => prg_rom[address as usize - 0x8000],
+                0xc000..=0xffff => {
+                    prg_rom[address as usize - 0xc000 + self.prg_bank as usize * 0x4000]
+                }
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
             3 => match address {
                 0x8000..=0xbfff => {
                     prg_rom[address as usize - 0x8000 + self.prg_bank as usize * 0x4000]
@@ -131,18 +163,45 @@ impl Mapper for SNROM {
                 0xc000..=0xffff => prg_rom[address as usize - 0xc000 + (bank_size - 1) * 0x4000],
                 _ => panic!("Unhandled address: {:#06X}", address),
             },
-            _ => todo!("prg read control"),
+            _ => todo!("prg read control: {:#07b}", self.control),
         }
     }
 
     fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        // todo!()
-        // dbg!(chr_rom.len());
-        None
+        if chr_rom.is_empty() {
+            return None;
+        }
+
+        let (bank1, bank2) = self.bank_addresses();
+
+        Some((
+            &chr_rom[bank1..bank1 + 0x1000],
+            &chr_rom[bank2..bank2 + 0x1000],
+        ))
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
-        None
+        if chr_rom.is_empty() {
+            return None;
+        }
+
+        let (bank1, bank2) = self.bank_addresses();
+
+        Some(match address {
+            0..=0x0fff => chr_rom[bank1 + address as usize],
+            0x1000..=0x1fff => chr_rom[bank2 - 0x1000 + address as usize],
+            _ => panic!("CHR address out of range: {:#06X}", address),
+        })
+    }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        match self.control & 0b11 {
+            2 => Some(Mirroring::Vertical),
+            3 => Some(Mirroring::Horizontal),
+            0 => Some(Mirroring::OneScreenLow),
+            1 => Some(Mirroring::OneScreenHigh),
+            _ => panic!("Unsupported mirror: {:#04X}", self.control),
+        }
     }
 }
 
@@ -179,6 +238,10 @@ impl Mapper for NROM {
         } else {
             None
         }
+    }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
     }
 }
 
@@ -218,6 +281,10 @@ impl Mapper for UNROM {
     fn read_chr_rom(&self, _chr_rom: &[u8], _address: u16) -> Option<u8> {
         None
     }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
+    }
 }
 
 pub struct Cartridge {
@@ -245,7 +312,7 @@ impl Cartridge {
     }
 
     pub fn mirroring(&self) -> Mirroring {
-        self.mirroring
+        self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 }
 

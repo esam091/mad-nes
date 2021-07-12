@@ -69,7 +69,7 @@ impl<'a> PpuDebugger<'a> {
                 canvas.set_draw_color(Color::RGB(r, g, b));
                 canvas.clear();
 
-                let current_nametable = 0x2000;
+                let current_nametable = ppu.top_left_nametable_address() as usize;
                 let current_attribute_table = current_nametable + 0x3c0;
 
                 for row in 0..30 {
@@ -123,7 +123,7 @@ impl<'a> PpuDebugger<'a> {
                 canvas.set_draw_color(Color::RGB(r, g, b));
                 canvas.clear();
 
-                let current_nametable = 0x2400;
+                let current_nametable = ppu.top_right_nametable_address() as usize;
                 let current_attribute_table = current_nametable + 0x3c0;
 
                 for row in 0..30 {
@@ -177,7 +177,7 @@ impl<'a> PpuDebugger<'a> {
                 canvas.set_draw_color(Color::RGB(r, g, b));
                 canvas.clear();
 
-                let current_nametable = 0x2800;
+                let current_nametable = ppu.bottom_left_nametable_address() as usize;
                 let current_attribute_table = current_nametable + 0x3c0;
 
                 for row in 0..30 {
@@ -231,7 +231,7 @@ impl<'a> PpuDebugger<'a> {
                 canvas.set_draw_color(Color::RGB(r, g, b));
                 canvas.clear();
 
-                let current_nametable = 0x2c00;
+                let current_nametable = ppu.bottom_right_nametable_address() as usize;
                 let current_attribute_table = current_nametable + 0x3c0;
 
                 for row in 0..30 {

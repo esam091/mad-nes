@@ -516,7 +516,7 @@ impl<'a> Renderer<'a> {
                 }
 
                 canvas.copy(background_texture, None, None).unwrap();
-                canvas.copy(debug_texture, None, None).unwrap();
+                // canvas.copy(debug_texture, None, None).unwrap();
 
                 if ppu.is_sprite_rendering_enabled() {
                     canvas
