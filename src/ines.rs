@@ -94,7 +94,6 @@ impl Mapper for SNROM {
         }
 
         // println!("Write MMC1: {:#010b} at {:#06X}", value, address);
-        println!("Write MMC1: {:#010b} at {:#06X}", value, address);
         if value & 0x80 != 0 {
             self.shift_register = 0b10000;
             self.control |= 0xc;
@@ -105,7 +104,7 @@ impl Mapper for SNROM {
         if self.shift_register & 1 == 0 {
             self.shift_register = value;
         } else {
-            println!("MMC1 value: {:#07b}, at: {:#06X}", value, address);
+            // println!("MMC1 value: {:#07b}, at: {:#06X}", value, address);
 
             self.shift_register = 0b10000;
 
@@ -122,11 +121,10 @@ impl Mapper for SNROM {
 
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
         if address >= 0x6000 && address < 0x8000 {
+            // println!("prg read at {:#06X}", address);
             return self.prg_ram[address as usize - 0x6000];
         }
-        // (0, 1: switch 32 KB at $8000, ignoring low bit of bank number;
-        //     2: fix first bank at $8000 and switch 16 KB bank at $C000;
-        //     3: fix last bank at $C000 and switch 16 KB bank at $8000)
+
         let bank_size = prg_bank_size(prg_rom);
 
         match (self.control & 0b1100) >> 2 {
@@ -167,9 +165,8 @@ impl Mapper for SNROM {
             return None;
         }
 
-        if self.control & 0b10000 != 0 {
-            // the reference says ignore bit 0, but bit 0 is what makes Castlevania II work
-            let bank_number = self.chr_bank_0 as usize;
+        if self.control & 0b10000 == 0 {
+            let bank_number = self.chr_bank_0 as usize & !1;
             let address = bank_number * 0x1000;
 
             Some((
