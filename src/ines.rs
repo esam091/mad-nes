@@ -84,6 +84,21 @@ impl SNROM {
             prg_ram: [0; 0x2000],
         }
     }
+
+    fn bank_addresses(&self) -> (usize, usize) {
+        let bank1: usize;
+        let bank2: usize;
+
+        if self.control & 0b10000 == 0 {
+            bank1 = (self.chr_bank_0 as usize & !1) * 0x1000;
+            bank2 = bank1 + 0x1000;
+        } else {
+            bank1 = self.chr_bank_0 as usize * 0x1000;
+            bank2 = self.chr_bank_1 as usize * 0x1000;
+        }
+
+        (bank1, bank2)
+    }
 }
 
 impl Mapper for SNROM {
@@ -165,30 +180,26 @@ impl Mapper for SNROM {
             return None;
         }
 
-        if self.control & 0b10000 == 0 {
-            let bank_number = self.chr_bank_0 as usize & !1;
-            let address = bank_number * 0x1000;
+        let (bank1, bank2) = self.bank_addresses();
 
-            Some((
-                &chr_rom[address..address + 0x1000],
-                &chr_rom[address + 0x1000..address + 0x2000],
-            ))
-        } else {
-            let bank1 = self.chr_bank_0 as usize * 0x1000;
-            let bank2 = self.chr_bank_1 as usize * 0x1000;
-
-            Some((
-                &chr_rom[bank1..bank1 + 0x1000],
-                &chr_rom[bank2..bank2 + 0x1000],
-            ))
-        }
+        Some((
+            &chr_rom[bank1..bank1 + 0x1000],
+            &chr_rom[bank2..bank2 + 0x1000],
+        ))
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.is_empty() {
             return None;
         }
-        todo!()
+
+        let (bank1, bank2) = self.bank_addresses();
+
+        Some(match address {
+            0..=0x0fff => chr_rom[bank1 + address as usize],
+            0x1000..=0x1fff => chr_rom[bank2 - 0x1000 + address as usize],
+            _ => panic!("CHR address out of range: {:#06X}", address),
+        })
     }
 
     fn mirroring(&self) -> Option<Mirroring> {
