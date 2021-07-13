@@ -77,7 +77,7 @@ impl SNROM {
     fn new() -> SNROM {
         SNROM {
             shift_register: 0b10000,
-            control: 0,
+            control: 0b01100,
             chr_bank_0: 0,
             chr_bank_1: 0,
             prg_bank: 0,
@@ -130,7 +130,20 @@ impl Mapper for SNROM {
         let bank_size = prg_bank_size(prg_rom);
 
         match (self.control & 0b1100) >> 2 {
-            0 | 1 => prg_rom[address as usize - 0x8000 + (self.prg_bank as usize & !1) * 0x8000],
+            0 => match address {
+                0x8000..=0xbfff => prg_rom[address as usize - 0x8000],
+                0xc000..=0xffff => {
+                    prg_rom[address as usize - 0xc000 + (self.prg_bank & !1) as usize * 0x8000]
+                }
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
+            1 => match address {
+                0x8000..=0xbfff => {
+                    prg_rom[address as usize - 0x8000 + (self.prg_bank & !1) as usize * 0x8000]
+                }
+                0xc000..=0xffff => prg_rom[address as usize - 0xc000 + (bank_size - 2) * 0x8000],
+                _ => panic!("Unhandled address: {:#06X}", address),
+            },
             2 => match address {
                 0x8000..=0xbfff => prg_rom[address as usize - 0x8000],
                 0xc000..=0xffff => {
