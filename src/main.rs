@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("NES Emulator", 256 * SCALE + 300, 240 * SCALE)
+        .window("NES Emulator", 256 * SCALE, 240 * SCALE)
         .position_centered()
         .build()
         .unwrap();

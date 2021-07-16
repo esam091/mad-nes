@@ -453,17 +453,66 @@ impl<'a> Renderer<'a> {
             .unwrap();
 
         let foreground_sprite_texture = &mut self.foreground_sprite_texture;
-        self.canvas
-            .with_texture_canvas(foreground_sprite_texture, |canvas| {
-                Self::render_sprites(
-                    DrawPriority::Foreground,
-                    canvas,
-                    ppu,
-                    &left_pattern_bank,
-                    &right_pattern_bank,
-                );
-            })
+        let mut foreground_pixels = [0u8; 256 * 240 * 4];
+        let frame = ppu.get_foreground_sprite_buffer();
+
+        for y in 0..240 {
+            for x in 0..256 {
+                let (r, g, b, a) = if frame[y][x] != 0xff {
+                    PALETTE[frame[y][x] as usize]
+                } else {
+                    (0, 0, 0, 0)
+                };
+
+                let start_index = (y * 256 + x) * 4;
+
+                foreground_pixels[start_index] = b;
+                foreground_pixels[start_index + 1] = g;
+                foreground_pixels[start_index + 2] = r;
+                foreground_pixels[start_index + 3] = a;
+            }
+        }
+
+        foreground_sprite_texture
+            .update(Rect::new(0, 0, 256, 240), &foreground_pixels, 256 * 4)
             .unwrap();
+
+        let foreground_sprite_texture = &mut self.foreground_sprite_texture;
+        let mut background_pixels = [0u8; 256 * 240 * 4];
+        let frame = ppu.get_background_sprite_buffer();
+
+        for y in 0..240 {
+            for x in 0..256 {
+                let (r, g, b, a) = if frame[y][x] != 0xff {
+                    PALETTE[frame[y][x] as usize]
+                } else {
+                    (0, 0, 0, 0)
+                };
+
+                let start_index = (y * 256 + x) * 4;
+
+                background_pixels[start_index] = b;
+                background_pixels[start_index + 1] = g;
+                background_pixels[start_index + 2] = r;
+                background_pixels[start_index + 3] = a;
+            }
+        }
+
+        background_sprite_texture
+            .update(Rect::new(0, 0, 256, 240), &background_pixels, 256 * 4)
+            .unwrap();
+
+        // self.canvas
+        //     .with_texture_canvas(foreground_sprite_texture, |canvas| {
+        //         Self::render_sprites(
+        //             DrawPriority::Foreground,
+        //             canvas,
+        //             ppu,
+        //             &left_pattern_bank,
+        //             &right_pattern_bank,
+        //         );
+        //     })
+        //     .unwrap();
 
         let debug_texture = &self.debug_texture;
         let background_texture = &mut self.background_texture;
@@ -511,7 +560,7 @@ impl<'a> Renderer<'a> {
 
                 if ppu.is_sprite_rendering_enabled() {
                     canvas
-                        .copy(&background_sprite_texture, None, Rect::new(0, 1, 256, 240))
+                        .copy(&background_sprite_texture, None, Rect::new(0, 0, 256, 240))
                         .unwrap();
                 }
 
@@ -520,7 +569,7 @@ impl<'a> Renderer<'a> {
 
                 if ppu.is_sprite_rendering_enabled() {
                     canvas
-                        .copy(foreground_sprite_texture, None, Rect::new(0, 1, 256, 240))
+                        .copy(foreground_sprite_texture, None, Rect::new(0, 0, 256, 240))
                         .unwrap();
                 }
             })
@@ -534,21 +583,21 @@ impl<'a> Renderer<'a> {
             )
             .unwrap();
 
-        self.canvas
-            .copy(
-                &self.left_pattern_texture,
-                None,
-                sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128),
-            )
-            .unwrap();
+        // self.canvas
+        //     .copy(
+        //         &self.left_pattern_texture,
+        //         None,
+        //         sdl2::rect::Rect::new(256 * SCALE as i32 + 10, 10, 128, 128),
+        //     )
+        //     .unwrap();
 
-        self.canvas
-            .copy(
-                &self.right_pattern_texture,
-                None,
-                Rect::new(256 * SCALE as i32 + 150, 10, 128, 128),
-            )
-            .unwrap();
+        // self.canvas
+        //     .copy(
+        //         &self.right_pattern_texture,
+        //         None,
+        //         Rect::new(256 * SCALE as i32 + 150, 10, 128, 128),
+        //     )
+        //     .unwrap();
 
         self.canvas.present();
     }

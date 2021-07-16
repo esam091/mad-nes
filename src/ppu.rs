@@ -1,6 +1,6 @@
 use std::{
     cell::{Ref, RefCell},
-    ops::BitAnd,
+    ops::{BitAnd, Shr},
     rc::Rc,
 };
 
@@ -25,18 +25,19 @@ impl WriteLatch {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PatternTableSelection {
     Left,
     Right,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DrawPriority {
     Foreground,
     Background,
 }
 
+#[derive(Debug)]
 pub struct SpriteData {
     pub x: u8,
     pub y: u8,
@@ -167,6 +168,8 @@ pub struct Ppu {
     current_fine_x: u8,
 
     frame_buffer: [[u8; 256]; 240],
+    foreground_sprite_buffer: [[u8; 256]; 240],
+    background_sprite_buffer: [[u8; 256]; 240],
 
     cartridge: Rc<RefCell<Cartridge>>,
 }
@@ -196,7 +199,7 @@ pub struct ColorPalette {
     pub sprite_color_set: [[u8; 3]; 4],
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SpriteDrawingMode {
     Draw8x8,
     Draw8x16,
@@ -235,6 +238,9 @@ impl Ppu {
             current_fine_x: 0,
 
             cartridge,
+
+            foreground_sprite_buffer: [[0xff; 256]; 240],
+            background_sprite_buffer: [[0xff; 256]; 240],
         }
     }
 
@@ -695,6 +701,7 @@ impl Ppu {
                 }
             }
             (241, 1) => {
+                self.render_sprites();
                 self.status.insert(PpuStatus::IN_VBLANK);
                 should_render = true
             }
@@ -711,6 +718,88 @@ impl Ppu {
         should_render
     }
 
+    fn render_sprites(&mut self) {
+        self.foreground_sprite_buffer = [[0xff; 256]; 240];
+        self.background_sprite_buffer = [[0xff; 256]; 240];
+
+        let sprites = self.get_all_oam_sprite_data();
+        let sprite_height = if self.control.contains(PpuControl::SPRITE_8X16_MODE) {
+            15
+        } else {
+            7
+        };
+
+        let is_double_height_mode = self.control.contains(PpuControl::SPRITE_8X16_MODE);
+
+        let mut secondary_oam_indexes: Vec<usize> = Vec::new();
+        let palette = self.get_color_palette().sprite_color_set;
+
+        // handle flips horizontal, flip vertical, 8x16
+        // dbg!(&sprites);
+        for y in 1..240 {
+            secondary_oam_indexes.clear();
+            for index in 0..sprites.len() {
+                let sprite = &sprites[index];
+
+                if sprite.y + 1 <= y && y <= sprite.y + 1 + sprite_height {
+                    secondary_oam_indexes.push(index);
+                }
+
+                if secondary_oam_indexes.len() == 8 {
+                    break;
+                }
+            }
+
+            // dbg!(&secondary_oam_indexes);
+            for index in &secondary_oam_indexes {
+                let sprite = &sprites[*index];
+
+                for i in 0..8 {
+                    if sprite.x.overflowing_add(i).1 {
+                        break;
+                    }
+
+                    let pixel_value: Option<u8>;
+
+                    {
+                        let table = self.pattern_tables();
+                        let (left_pattern_table, right_pattern_table) = table.get_tables();
+                        let pattern_table = if sprite.tile_pattern == PatternTableSelection::Right {
+                            right_pattern_table
+                        } else {
+                            left_pattern_table
+                        };
+
+                        pixel_value = sprite_pixel_value(
+                            &sprite,
+                            pattern_table,
+                            y as u32,
+                            i,
+                            is_double_height_mode,
+                        );
+                    }
+
+                    let target_buffer = if sprite.draw_priority == DrawPriority::Foreground {
+                        &mut self.foreground_sprite_buffer
+                    } else {
+                        &mut self.background_sprite_buffer
+                    };
+
+                    if let Some(value) = pixel_value {
+                        if value != 0
+                            && target_buffer[y as usize][sprite.x as usize + i as usize] == 0xff
+                        {
+                            target_buffer[y as usize][sprite.x as usize + i as usize] =
+                                palette[sprite.color_palette as usize][value as usize - 1];
+                        }
+                    }
+                }
+            }
+        }
+
+        // watch out for background value and sprite priority
+    }
+
     fn toggle_sprite_0_hit_if_needed(&mut self) {
         if !self.status.contains(PpuStatus::SPRITE_0_HIT) {
             if !self
@@ -721,9 +810,6 @@ impl Ppu {
             }
 
             let sprite_data = self.get_oam_sprite_data_at(0);
-
-            let vertical_flip = sprite_data.flip_vertical;
-            let horizontal_flip = sprite_data.flip_horizontal;
 
             let sprite_y = sprite_data.y as u32 + 1;
             let sprite_x = sprite_data.x;
@@ -745,59 +831,40 @@ impl Ppu {
                 return;
             }
 
-            let mut sprite_fine_y = self.current_scanline - sprite_y;
-            let mut tile = sprite_data.tile_number;
-
-            if vertical_flip {
-                if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x8 {
-                    sprite_fine_y = sprite_height_offset - sprite_fine_y;
-                } else {
-                    // When flipping is on in 8x16 mode, the second tile is
-                    // above the first tile
-                    if sprite_fine_y < 8 {
-                        tile += 1;
-                    }
-
-                    // Split the offset into two 8 pixel length
-                    sprite_fine_y %= 8;
-                }
-            }
-
-            let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
-            let left_tile: u8;
-            let right_tile: u8;
-
-            {
-                let table = self.pattern_tables();
-                let (left_pattern_table, right_pattern_table) = table.get_tables();
-                let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
-                    right_pattern_table
-                } else {
-                    left_pattern_table
-                };
-                left_tile = pattern_table[pattern_row];
-                right_tile = pattern_table[pattern_row + 8];
-            }
+            let table = self.pattern_tables();
+            let (left_pattern_table, right_pattern_table) = table.get_tables();
+            let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
+                right_pattern_table
+            } else {
+                left_pattern_table
+            };
 
             let include_leftmost_tile = self
                 .mask
                 .contains(PpuMask::SHOW_LEFTMOST_BACKGROUND | PpuMask::SHOW_LEFTMOST_SPRITES);
 
             for i in 0..8 {
-                let x = sprite_x + i;
+                let (x, overflow) = sprite_x.overflowing_add(i);
+
+                if overflow {
+                    break;
+                }
 
                 if x == 255 || (!include_leftmost_tile && x < 8) {
                     continue;
                 }
 
-                let and = if !horizontal_flip {
-                    1 << (7 - i)
-                } else {
-                    1 << i
-                };
+                let pixel_value = sprite_pixel_value(
+                    &sprite_data,
+                    &pattern_table,
+                    self.current_scanline,
+                    i,
+                    self.control.contains(PpuControl::SPRITE_8X16_MODE),
+                );
                 if self.frame_buffer[self.current_scanline as usize][x as usize] != 0xff
-                    && (left_tile & and != 0 || right_tile & and != 0)
+                    && pixel_value.unwrap_or(0) != 0
                 {
+                    drop(table);
                     self.status.insert(PpuStatus::SPRITE_0_HIT);
                     return;
                 }
@@ -807,6 +874,14 @@ impl Ppu {
 
     pub fn get_frame_buffer(&self) -> &[[u8; 256]; 240] {
         &self.frame_buffer
+    }
+
+    pub fn get_foreground_sprite_buffer(&self) -> &[[u8; 256]; 240] {
+        &self.foreground_sprite_buffer
+    }
+
+    pub fn get_background_sprite_buffer(&self) -> &[[u8; 256]; 240] {
+        &self.background_sprite_buffer
     }
 
     pub fn generates_nmi_at_vblank(&self) -> bool {
@@ -836,4 +911,58 @@ impl Ppu {
     pub fn bottom_right_nametable_address(&self) -> u16 {
         self.cartridge.borrow().mirroring().real_address(0x2c00)
     }
+}
+
+fn sprite_pixel_value(
+    sprite_data: &SpriteData,
+    pattern_table: &[u8],
+    y: u32,
+    x: u8,
+    double_height_mode: bool,
+) -> Option<u8> {
+    let vertical_flip = sprite_data.flip_vertical;
+    let horizontal_flip = sprite_data.flip_horizontal;
+
+    let sprite_y = sprite_data.y as u32 + 1;
+
+    let sprite_height_offset = if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x16 {
+        15
+    } else {
+        7
+    };
+
+    // Check whether the scanline is in sprite's y range
+    if y < sprite_y || y > sprite_y + sprite_height_offset {
+        return None;
+    }
+
+    let mut sprite_fine_y = y - sprite_y;
+    let mut tile = sprite_data.tile_number;
+
+    if vertical_flip {
+        if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x8 {
+            sprite_fine_y = sprite_height_offset - sprite_fine_y;
+        } else {
+            // When flipping is on in 8x16 mode, the second tile is
+            // above the first tile
+            if sprite_fine_y < 8 {
+                tile += 1;
+            }
+
+            // Split the offset into two 8 pixel length
+            sprite_fine_y %= 8;
+            sprite_fine_y = 7 - sprite_fine_y;
+        }
+    } else if sprite_fine_y >= 8 {
+        tile += 1;
+        sprite_fine_y %= 8;
+    }
+
+    let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
+    let left_tile = pattern_table[pattern_row];
+    let right_tile = pattern_table[pattern_row + 8];
+
+    let shift = if !horizontal_flip { 7 - x } else { x };
+    let and = 1 << shift;
+    Some(left_tile.bitand(and).shr(shift) + right_tile.bitand(and).shr(shift) * 2)
 }
