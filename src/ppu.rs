@@ -636,7 +636,10 @@ impl Ppu {
 
                     // dbg!(bit);
 
-                    let color: u8 = if bit == 0 {
+                    let color: u8 = if bit == 0
+                        || (self.current_dot < 8
+                            && !self.mask.contains(PpuMask::SHOW_LEFTMOST_BACKGROUND))
+                    {
                         0xff
                     } else {
                         palette_value[bit as usize - 1]
