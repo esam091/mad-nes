@@ -314,7 +314,10 @@ impl Mapper for TxROM {
         let is_odd = address % 2 != 0;
 
         match (address, is_odd) {
-            (0x8000..=0x9fff, false) => self.bank_select = value,
+            (0x8000..=0x9fff, false) => {
+                self.bank_select = value;
+                println!("TxROM write {:#06X}: {:#04X}", address, value);
+            }
             (0x8000..=0x9fff, true) => {
                 let r_index = self.bank_select & 0b111;
                 self.r[r_index as usize] = if r_index >= 6 {
@@ -323,7 +326,9 @@ impl Mapper for TxROM {
                     value & 0b11111110
                 } else {
                     value
-                }
+                };
+
+                println!("Write bank {}: {:#04X}", r_index, value);
             }
             (0xa000..=0xbfff, false) => {
                 self.mirroring = if value & 1 == 0 {
@@ -349,11 +354,11 @@ impl Mapper for TxROM {
 
         let mapped_address = match (address, prg_flag) {
             (0x8000..=0x9fff, false) => address - 0x8000 + self.r[6] as u16 * 0x2000,
-            (0x8000..=0x9fff, true) => address - 0x8000 + self.r[prg_size - 2] as u16 * 0x2000,
+            (0x8000..=0x9fff, true) => address - 0x8000 + (prg_size - 2) as u16 * 0x2000,
             (0xa000..=0xbfff, _) => address - 0xa000 + self.r[7] as u16 * 0x2000,
-            (0xc000..=0xdfff, false) => address - 0xc000 + self.r[prg_size - 2] as u16 * 0x2000,
+            (0xc000..=0xdfff, false) => address - 0xc000 + (prg_size - 2) as u16 * 0x2000,
             (0xc000..=0xdfff, true) => address - 0xc000 + self.r[6] as u16 * 0x2000,
-            (0xe000..=0xffff, _) => address - 0xe000 + self.r[prg_size - 1] as u16 * 0x2000,
+            (0xe000..=0xffff, _) => address - 0xe000 + (prg_size - 1) as u16 * 0x2000,
             _ => panic!("Unhandled address: {:#06X}", address),
         };
 
