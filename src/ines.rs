@@ -291,6 +291,9 @@ struct TxROM {
     bank_select: u8,
     r: [u8; 8],
     mirroring: Mirroring,
+    irq_latch: u8,
+    irq_reload: bool,
+    irq_enabled: bool,
 }
 
 impl TxROM {
@@ -299,6 +302,9 @@ impl TxROM {
             bank_select: 0,
             r: [0; 8],
             mirroring: Mirroring::Vertical,
+            irq_latch: 0,
+            irq_reload: false,
+            irq_enabled: false,
         }
     }
 }
@@ -325,6 +331,13 @@ impl Mapper for TxROM {
                 } else {
                     Mirroring::Horizontal
                 }
+            }
+            (0xc000..=0xdfff, false) => self.irq_latch = value,
+            (0xc000..=0xdfff, true) => self.irq_reload = true,
+            (0xe000..=0xffff, false) => self.irq_enabled = false,
+            (0xe000..=0xffff, true) => {
+                self.irq_enabled = true;
+                todo!("irq is enabled but not implemented")
             }
             _ => {}
         }
