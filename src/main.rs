@@ -129,7 +129,7 @@ fn main() -> Result<(), String> {
         .unwrap();
 
     let debugger_canvas = video_subsystem
-        .window("Ppu Debugger", 1024, 775)
+        .window("Ppu Debugger", 1256, 775)
         .build()
         .unwrap()
         .into_canvas()

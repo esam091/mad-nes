@@ -45,6 +45,7 @@ pub struct Cpu {
     irq_vector: u16,
 
     pub bus: RealBus,
+    delayed_i_flag: Option<bool>,
 }
 
 impl Cpu {
@@ -72,7 +73,30 @@ impl Cpu {
         self.pc = self.nmi_vector;
     }
 
+    pub fn enter_irq(&mut self) {
+        if !self.is_interrupt_disable_flag_on() {
+            self.consume_pending_interrupt_flag();
+
+            let addresses = self.pc.to_le_bytes();
+            self.push(addresses[1]);
+            self.push(addresses[0]);
+            self.push(self.p.bitand(!(1 << 5)));
+            self.pc = self.irq_vector;
+            self.set_interrupt_disable_flag(true);
+        }
+    }
+
+    fn consume_pending_interrupt_flag(&mut self) {
+        if let Some(is_on) = self.delayed_i_flag {
+            self.set_interrupt_disable_flag(is_on as bool);
+            self.delayed_i_flag = None;
+        }
+    }
+
     pub fn step(&mut self) -> CpuResult {
+        // println!("PC = {:#06x}", self.pc);
+        self.consume_pending_interrupt_flag();
+
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {
                 format!(
@@ -1020,12 +1044,12 @@ impl Cpu {
             Instruction::Bmi(offset) => self.jump_if(self.is_negative_flag_on(), offset),
 
             Instruction::Sei => {
-                self.set_interrupt_flag(true);
+                self.delayed_i_flag = Some(true);
                 cycles(2)
             }
 
             Instruction::Cli => {
-                self.set_interrupt_flag(false);
+                self.delayed_i_flag = Some(false);
                 cycles(2)
             }
 
@@ -1060,7 +1084,14 @@ impl Cpu {
             }
 
             Instruction::Plp => {
-                self.p = self.pop().bitand(!(1 << 4)).bitor(1 << 5); // this bit is always on
+                let value = self.pop().bitand(!(1 << 4)).bitor(1 << 5); // this bit is always on
+
+                let current_i_flag = self.is_interrupt_disable_flag_on();
+                self.p = value;
+
+                self.delayed_i_flag = Some(value & 4 != 0);
+
+                self.set_interrupt_disable_flag(current_i_flag);
 
                 cycles(4)
             }
@@ -1786,7 +1817,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn set_interrupt_flag(&mut self, is_on: bool) {
+    fn set_interrupt_disable_flag(&mut self, is_on: bool) {
         self.set_p_flag(2, is_on);
     }
 
@@ -1808,6 +1839,11 @@ impl Cpu {
     #[inline(always)]
     fn is_zero_flag_on(&self) -> bool {
         self.p.bitand(2) != 0
+    }
+
+    #[inline(always)]
+    fn is_interrupt_disable_flag_on(&self) -> bool {
+        self.p.bitand(4) != 0
     }
 
     #[inline(always)]
@@ -1844,12 +1880,13 @@ impl Cpu {
             x: 0,
             y: 0,
             p: 0x24,
-            sp: 0xff,
+            sp: 0xfd,
             nmi_vector,
             reset_vector,
             irq_vector,
 
             bus: bus,
+            delayed_i_flag: None,
         }
     }
 

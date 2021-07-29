@@ -21,6 +21,10 @@ pub struct Machine {
 }
 
 impl Machine {
+    fn has_pending_irq(&self) -> bool {
+        self.cpu.bus.apu.has_pending_irq() || self.cpu.bus.cartridge.borrow().has_pending_irq()
+    }
+
     pub fn load(file_path: &String, mut apu: Apu) -> Result<Machine, std::io::Error> {
         // todo: fix error type
         let cartridge = load_cartridge(file_path).ok().unwrap();
@@ -47,17 +51,24 @@ impl Machine {
 
     pub fn step(&mut self) -> Option<SideEffect> {
         if self.pending_cycles == 0 {
+            if self.has_pending_irq() {
+                self.cpu.enter_irq();
+            }
+
             let result = self.cpu.step();
             let cycles = result.cycles_elapsed;
             self.pending_cycles = cycles;
         }
 
-        self.cpu.bus.apu.half_step();
         self.pending_cycles -= 1;
 
+        self.cpu.bus.apu.half_step();
+
         let mut should_render = false;
+
         for _ in 0..3 {
             let result = self.cpu.bus.ppu.step();
+
             should_render = should_render || result;
         }
 
@@ -69,6 +80,7 @@ impl Machine {
 
             return Some(SideEffect::Render);
         }
+
         None
     }
 

@@ -9,9 +9,10 @@ fn prg_bank_size(bytes: &[u8]) -> usize {
 pub trait Mapper {
     fn write_address(&mut self, prg_rom: &[u8], address: u16, value: u8);
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
     fn mirroring(&self) -> Option<Mirroring>;
+    fn scanline_tick(&mut self);
+    fn has_pending_irq(&self) -> bool;
 }
 
 struct CNROM {
@@ -39,18 +40,6 @@ impl Mapper for CNROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.is_empty() {
-            None
-        } else {
-            let start = self.chr_bank * 0x2000;
-            Some((
-                &chr_rom[start..start + 0x1000],
-                &chr_rom[start + 0x1000..start + 0x2000],
-            ))
-        }
-    }
-
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.is_empty() {
             None
@@ -61,6 +50,12 @@ impl Mapper for CNROM {
 
     fn mirroring(&self) -> Option<Mirroring> {
         None
+    }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
     }
 }
 
@@ -167,19 +162,6 @@ impl Mapper for SNROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.is_empty() {
-            return None;
-        }
-
-        let (bank1, bank2) = self.bank_addresses();
-
-        Some((
-            &chr_rom[bank1..bank1 + 0x1000],
-            &chr_rom[bank2..bank2 + 0x1000],
-        ))
-    }
-
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.is_empty() {
             return None;
@@ -203,6 +185,12 @@ impl Mapper for SNROM {
             _ => panic!("Unsupported mirror: {:#04X}", self.control),
         }
     }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
+    }
 }
 
 struct NROM;
@@ -224,14 +212,6 @@ impl Mapper for NROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.len() == 0 {
-            None
-        } else {
-            Some((&chr_rom[0..0x1000], &chr_rom[0x1000..]))
-        }
-    }
-
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.len() != 0 {
             Some(chr_rom[address as usize])
@@ -242,6 +222,12 @@ impl Mapper for NROM {
 
     fn mirroring(&self) -> Option<Mirroring> {
         None
+    }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
     }
 }
 
@@ -274,16 +260,178 @@ impl Mapper for UNROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, _chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        None
-    }
-
     fn read_chr_rom(&self, _chr_rom: &[u8], _address: u16) -> Option<u8> {
         None
     }
 
     fn mirroring(&self) -> Option<Mirroring> {
         None
+    }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
+    }
+}
+
+struct TxROM {
+    bank_select: u8,
+    r: [u8; 8],
+    mirroring: Mirroring,
+    irq_reload_value: u8,
+    irq_reset: bool,
+    irq_enabled: bool,
+    current_irq_counter: u8,
+    has_pending_irq: bool,
+}
+
+impl TxROM {
+    fn new() -> TxROM {
+        TxROM {
+            bank_select: 0,
+            r: [0; 8],
+            mirroring: Mirroring::Vertical,
+            irq_reload_value: 0,
+            irq_reset: false,
+            irq_enabled: false,
+            current_irq_counter: 0,
+            has_pending_irq: false,
+        }
+    }
+
+    fn toggle_pending_irq_if_possible(&mut self) {
+        if self.current_irq_counter == 0 && self.irq_enabled {
+            self.has_pending_irq = true;
+        }
+    }
+}
+
+impl Mapper for TxROM {
+    fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
+        if address >= 0xc000 {
+            println!("TxROM write {:#06X}: {:#04X}", address, value);
+        }
+        let is_odd = address % 2 != 0;
+
+        match (address, is_odd) {
+            (0x8000..=0x9fff, false) => {
+                self.bank_select = value;
+            }
+            (0x8000..=0x9fff, true) => {
+                let r_index = self.bank_select & 0b111;
+                self.r[r_index as usize] = if r_index >= 6 {
+                    value & 0b00111111
+                } else if r_index <= 1 {
+                    value & 0b11111110
+                } else {
+                    value
+                };
+
+                // println!("Write bank {}: {:#04X}", r_index, value);
+            }
+            (0xa000..=0xbfff, false) => {
+                self.mirroring = if value & 1 == 0 {
+                    Mirroring::Vertical
+                } else {
+                    Mirroring::Horizontal
+                }
+            }
+            (0xc000..=0xdfff, false) => self.irq_reload_value = value,
+            (0xc000..=0xdfff, true) => {
+                self.irq_reset = true;
+                // println!("Reset irq counter");
+            }
+            (0xe000..=0xffff, false) => {
+                // println!("disable IRQ");
+                self.irq_enabled = false;
+                self.has_pending_irq = false;
+            }
+            (0xe000..=0xffff, true) => {
+                self.irq_enabled = true;
+                // println!("enable IRQ");
+            }
+
+            _ => {}
+        }
+    }
+
+    fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8 {
+        let prg_flag = self.bank_select & 0x40 != 0;
+        let prg_size = prg_rom.len() / 0x2000;
+
+        let mapped_address: usize = match (address, prg_flag) {
+            (0x8000..=0x9fff, false) => address as usize - 0x8000 + self.r[6] as usize * 0x2000,
+            (0x8000..=0x9fff, true) => address as usize - 0x8000 + (prg_size - 2) as usize * 0x2000,
+            (0xa000..=0xbfff, _) => address as usize - 0xa000 + self.r[7] as usize * 0x2000,
+            (0xc000..=0xdfff, false) => {
+                address as usize - 0xc000 + (prg_size - 2) as usize * 0x2000
+            }
+            (0xc000..=0xdfff, true) => address as usize - 0xc000 + self.r[6] as usize * 0x2000,
+            (0xe000..=0xffff, _) => address as usize - 0xe000 + (prg_size - 1) as usize * 0x2000,
+            _ => panic!("Unhandled address: {:#06X}", address),
+        };
+
+        prg_rom[mapped_address as usize]
+    }
+
+    fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
+        let chr_flag = self.bank_select & 0x80 != 0;
+        let chr_bank_size = 0x400;
+
+        if chr_rom.len() == 0 {
+            None
+        } else {
+            let address = address as usize;
+            let mapped_address: usize = match (address, chr_flag) {
+                (0x0000..=0x07ff, false) => address + self.r[0] as usize * chr_bank_size,
+                (0x0800..=0x0fff, false) => address - 0x0800 + self.r[1] as usize * chr_bank_size,
+                (0x1000..=0x13ff, false) => address - 0x1000 + self.r[2] as usize * chr_bank_size,
+                (0x1400..=0x17ff, false) => address - 0x1400 + self.r[3] as usize * chr_bank_size,
+                (0x1800..=0x1bff, false) => address - 0x1800 + self.r[4] as usize * chr_bank_size,
+                (0x1c00..=0x1fff, false) => address - 0x1c00 + self.r[5] as usize * chr_bank_size,
+
+                (0x0000..=0x03ff, true) => address + self.r[2] as usize * chr_bank_size,
+                (0x0400..=0x07ff, true) => address - 0x0400 + self.r[3] as usize * chr_bank_size,
+                (0x0800..=0x0bff, true) => address - 0x0800 + self.r[4] as usize * chr_bank_size,
+                (0x0c00..=0x0fff, true) => address - 0x0c00 + self.r[5] as usize * chr_bank_size,
+                (0x1000..=0x17ff, true) => address - 0x1000 + self.r[0] as usize * chr_bank_size,
+                (0x1800..=0x1fff, true) => address - 0x1800 + self.r[1] as usize * chr_bank_size,
+                _ => panic!("Unhandled address: {:#06X}", address),
+            };
+
+            Some(chr_rom[mapped_address])
+        }
+    }
+
+    fn mirroring(&self) -> Option<Mirroring> {
+        Some(self.mirroring)
+    }
+
+    fn scanline_tick(&mut self) {
+        if self.irq_reset {
+            self.current_irq_counter = self.irq_reload_value;
+            self.irq_reset = false;
+
+            self.toggle_pending_irq_if_possible();
+            // println!("Reload counter to {}", self.current_irq_counter);
+        } else {
+            if self.current_irq_counter == 0 {
+                self.current_irq_counter = self.irq_reload_value;
+
+                self.toggle_pending_irq_if_possible();
+            } else {
+                if self.current_irq_counter > 0 {
+                    self.current_irq_counter -= 1;
+                }
+                dbg!(self.current_irq_counter);
+                self.toggle_pending_irq_if_possible();
+            }
+        }
+    }
+
+    fn has_pending_irq(&self) -> bool {
+        self.has_pending_irq
     }
 }
 
@@ -303,16 +451,20 @@ impl Cartridge {
         self.mapper.read_address(&self.prg_rom, address)
     }
 
-    pub fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])> {
-        self.mapper.pattern_tables(&self.chr_rom)
-    }
-
     pub fn read_chr_rom(&self, address: u16) -> Option<u8> {
         self.mapper.read_chr_rom(&self.chr_rom, address)
     }
 
     pub fn mirroring(&self) -> Mirroring {
         self.mapper.mirroring().unwrap_or(self.mirroring)
+    }
+
+    pub fn scanline_tick(&mut self) {
+        self.mapper.scanline_tick()
+    }
+
+    pub fn has_pending_irq(&self) -> bool {
+        self.mapper.has_pending_irq()
     }
 }
 
@@ -354,6 +506,7 @@ pub fn load_cartridge<S: Into<String>>(source: S) -> Result<Cartridge, RomParseE
         1 => Box::new(SNROM::new()),
         2 => Box::new(UNROM::new()),
         3 => Box::new(CNROM::new()),
+        4 => Box::new(TxROM::new()),
         _ => return Err(RomParseError::UnsupportedMapper(mapper_number)),
     };
 

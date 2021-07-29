@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell},
+    convert::TryInto,
     ops::{BitAnd, Shr},
     rc::Rc,
 };
@@ -180,19 +181,6 @@ pub struct PatternTableRef<'a> {
     right_vram: &'a [u8],
 }
 
-impl<'a, 'b> PatternTableRef<'a> {
-    pub fn get_tables(&'b self) -> (&'b [u8], &'b [u8])
-    where
-        'a: 'b,
-    {
-        let asd = self.cartridge.pattern_tables();
-        match asd {
-            Some(tables) => tables,
-            None => (self.left_vram, self.right_vram),
-        }
-    }
-}
-
 pub struct ColorPalette {
     pub background: u8,
     pub background_color_set: [[u8; 3]; 4],
@@ -297,7 +285,7 @@ impl Ppu {
     pub fn write_oam_data(&mut self, data: u8) {
         log_ppu!("[{:#03}] Write $2004: {:#04X}", self.current_scanline, data);
         self.oam_data[self.current_oam_address as usize] = data;
-        self.current_oam_address += 1;
+        self.current_oam_address = self.current_oam_address.wrapping_add(1);
     }
 
     pub fn read_oam_data(&self) -> u8 {
@@ -325,25 +313,29 @@ impl Ppu {
             self.read_buffer = self.memory[self.v as usize - 0x1000];
 
             self.v = self.v.wrapping_add(self.control.address_increment());
+            if self.v >= 0x1000 && self.v < 0x2000 {
+                // println!("Clock counter!");
+                self.cartridge.borrow_mut().scanline_tick();
+            }
 
             value
         } else {
-            let cartridge = self.cartridge.borrow();
+            let mut cartridge = self.cartridge.borrow_mut();
             let value = if real_address < 0x2000 {
                 cartridge
                     .read_chr_rom(real_address)
                     .unwrap_or(self.memory[real_address as usize])
             } else {
-                let real_address = self
-                    .cartridge
-                    .borrow()
-                    .mirroring()
-                    .real_address(real_address);
+                let real_address = cartridge.mirroring().real_address(real_address);
                 self.memory[real_address as usize]
             };
 
             self.read_buffer = value;
             self.v = self.v.wrapping_add(self.control.address_increment());
+            if self.v >= 0x1000 && self.v < 0x2000 {
+                // println!("Clock counter!");
+                cartridge.scanline_tick();
+            }
 
             last_buffer
         }
@@ -377,6 +369,11 @@ impl Ppu {
         }
 
         self.v = self.v.wrapping_add(self.control.address_increment());
+
+        if self.v >= 0x1000 && self.v < 0x2000 {
+            // println!("Clock counter!");
+            self.cartridge.borrow_mut().scanline_tick();
+        }
     }
 
     pub fn write_scroll(&mut self, position: u8) {
@@ -484,22 +481,49 @@ impl Ppu {
                 self.t &= 0xff00;
                 self.t |= address as u16;
                 self.v = self.t;
+
+                if self.v >= 0x1000 && self.v < 0x2000 {
+                    // println!("Clock counter!");
+                    self.cartridge.borrow_mut().scanline_tick();
+                }
             }
         }
 
         self.write_latch.flip();
     }
 
-    pub fn get_buffer(&self) -> &VideoMemoryBuffer {
-        &self.memory
+    fn read_pattern_at_address(&self, address: u16) -> u8 {
+        self.cartridge
+            .borrow()
+            .read_chr_rom(address)
+            .unwrap_or(self.memory[address as usize])
     }
 
-    pub fn pattern_tables(&self) -> PatternTableRef {
-        PatternTableRef {
-            cartridge: self.cartridge.borrow(),
-            left_vram: &self.memory[0..0x1000],
-            right_vram: &self.memory[0x1000..0x2000],
+    pub fn read_pattern_value(
+        &self,
+        pattern_selection: PatternTableSelection,
+        tile_number: u8,
+        x: u8,
+        y: u16,
+    ) -> u8 {
+        let mut address: u16 = 0;
+
+        if pattern_selection == PatternTableSelection::Right {
+            address += 0x1000;
         }
+
+        address += tile_number as u16 * 0x10 + y as u16;
+
+        let pattern1 = self.read_pattern_at_address(address);
+        let pattern2 = self.read_pattern_at_address(address + 8);
+
+        let shift = 7 - x;
+
+        ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2
+    }
+
+    pub fn get_buffer(&self) -> &VideoMemoryBuffer {
+        &self.memory
     }
 
     pub fn current_background_pattern_table(&self) -> PatternTableSelection {
@@ -564,6 +588,9 @@ impl Ppu {
         let mut should_render = false;
         match (self.current_scanline, self.current_dot) {
             (261, 1) => {
+                self.background_sprite_buffer = [[0xff; 256]; 240];
+                self.foreground_sprite_buffer = [[0xff; 256]; 240];
+
                 self.status.remove(PpuStatus::IN_VBLANK);
                 self.status.remove(PpuStatus::SPRITE_0_HIT);
 
@@ -613,32 +640,12 @@ impl Ppu {
 
                     let palette_value = palette.background_color_set[palette_set_index as usize];
 
-                    // dbg!(
-                    //     // hex_string(tile_address),
-                    //     // tile_value,
-                    //     coarse_x, // self.x,
-                    //     coarse_y, fine_y
-                    // );
-
-                    let pattern_address = tile_value as u16 * 0x10 + fine_y;
-
-                    let pattern1: u8;
-                    let pattern2: u8;
-
-                    {
-                        let tables = self.pattern_tables();
-                        let (left_pattern_table, right_pattern_table) = tables.get_tables();
-                        let pattern_table = match self.current_background_pattern_table() {
-                            PatternTableSelection::Left => left_pattern_table,
-                            PatternTableSelection::Right => right_pattern_table,
-                        };
-                        pattern1 = pattern_table[pattern_address as usize];
-                        pattern2 = pattern_table[pattern_address as usize + 8];
-                    }
-
-                    let shift = 7 - self.current_fine_x;
-
-                    let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
+                    let bit = self.read_pattern_value(
+                        self.current_background_pattern_table(),
+                        tile_value,
+                        self.current_fine_x,
+                        fine_y,
+                    );
 
                     // dbg!(bit);
 
@@ -670,6 +677,8 @@ impl Ppu {
                 }
             }
             (0..=239, 256) => {
+                self.render_scanline_sprite();
+
                 if self.is_background_rendering_enabled() {
                     self.v &= !0b10000011111;
                     self.v |= self.t & 0b10000011111;
@@ -701,10 +710,11 @@ impl Ppu {
                 }
             }
             (241, 1) => {
-                self.render_sprites();
                 self.status.insert(PpuStatus::IN_VBLANK);
                 should_render = true
             }
+            (0..=239, 260) => self.scanline_tick_if_possible(),
+            (261, 260) => self.scanline_tick_if_possible(),
             _ => {}
         }
 
@@ -718,10 +728,7 @@ impl Ppu {
         should_render
     }
 
-    fn render_sprites(&mut self) {
-        self.foreground_sprite_buffer = [[0xff; 256]; 240];
-        self.background_sprite_buffer = [[0xff; 256]; 240];
-
+    fn render_scanline_sprite(&mut self) {
         let sprites = self.get_all_oam_sprite_data();
         let sprite_height = if self.control.contains(PpuControl::SPRITE_8X16_MODE) {
             15
@@ -729,75 +736,63 @@ impl Ppu {
             7
         };
 
-        let is_double_height_mode = self.control.contains(PpuControl::SPRITE_8X16_MODE);
-
         let mut secondary_oam_indexes: Vec<usize> = Vec::new();
         let palette = self.get_color_palette().sprite_color_set;
 
         // handle flips horizontal, flip vertical, 8x16
         // dbg!(&sprites);
-        for y in 1..240 {
-            secondary_oam_indexes.clear();
-            for index in 0..sprites.len() {
-                let sprite = &sprites[index];
+        secondary_oam_indexes.clear();
+        for index in 0..sprites.len() {
+            let sprite = &sprites[index];
 
-                if sprite.y + 1 <= y && y <= sprite.y + 1 + sprite_height {
-                    secondary_oam_indexes.push(index);
-                }
-
-                if secondary_oam_indexes.len() == 8 {
-                    break;
-                }
+            if sprite.y as u32 + 1 <= self.current_scanline
+                && self.current_scanline <= sprite.y as u32 + 1 + sprite_height
+            {
+                secondary_oam_indexes.push(index);
             }
 
-            // dbg!(&secondary_oam_indexes);
-            for index in &secondary_oam_indexes {
-                let sprite = &sprites[*index];
+            if secondary_oam_indexes.len() == 8 {
+                break;
+            }
+        }
 
-                for i in 0..8 {
-                    if sprite.x.overflowing_add(i).1 {
-                        break;
-                    }
+        // dbg!(&secondary_oam_indexes);
+        for index in &secondary_oam_indexes {
+            let sprite = &sprites[*index];
 
-                    let pixel_value: Option<u8>;
+            for i in 0..8 {
+                if sprite.x.overflowing_add(i).1 {
+                    break;
+                }
 
+                let pixel_value = sprite_pixel_value(
+                    &sprite,
+                    |pattern_selection, tile, x, y| {
+                        self.read_pattern_value(pattern_selection, tile, x, y as u16)
+                    },
+                    self.current_scanline,
+                    i,
+                );
+
+                let target_buffer = if sprite.draw_priority == DrawPriority::Foreground {
+                    &mut self.foreground_sprite_buffer
+                } else {
+                    &mut self.background_sprite_buffer
+                };
+
+                if let Some(value) = pixel_value {
+                    if value != 0
+                        && target_buffer[self.current_scanline as usize]
+                            [sprite.x as usize + i as usize]
+                            == 0xff
                     {
-                        let table = self.pattern_tables();
-                        let (left_pattern_table, right_pattern_table) = table.get_tables();
-                        let pattern_table = if sprite.tile_pattern == PatternTableSelection::Right {
-                            right_pattern_table
-                        } else {
-                            left_pattern_table
-                        };
-
-                        pixel_value = sprite_pixel_value(
-                            &sprite,
-                            pattern_table,
-                            y as u32,
-                            i,
-                            is_double_height_mode,
-                        );
-                    }
-
-                    let target_buffer = if sprite.draw_priority == DrawPriority::Foreground {
-                        &mut self.foreground_sprite_buffer
-                    } else {
-                        &mut self.background_sprite_buffer
-                    };
-
-                    if let Some(value) = pixel_value {
-                        if value != 0
-                            && target_buffer[y as usize][sprite.x as usize + i as usize] == 0xff
-                        {
-                            target_buffer[y as usize][sprite.x as usize + i as usize] =
-                                palette[sprite.color_palette as usize][value as usize - 1];
-                        }
+                        target_buffer[self.current_scanline as usize]
+                            [sprite.x as usize + i as usize] =
+                            palette[sprite.color_palette as usize][value as usize - 1];
                     }
                 }
             }
         }
-
-        // watch out for background value and sprite priority
     }
 
     fn toggle_sprite_0_hit_if_needed(&mut self) {
@@ -831,14 +826,6 @@ impl Ppu {
                 return;
             }
 
-            let table = self.pattern_tables();
-            let (left_pattern_table, right_pattern_table) = table.get_tables();
-            let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
-                right_pattern_table
-            } else {
-                left_pattern_table
-            };
-
             let include_leftmost_tile = self
                 .mask
                 .contains(PpuMask::SHOW_LEFTMOST_BACKGROUND | PpuMask::SHOW_LEFTMOST_SPRITES);
@@ -856,15 +843,15 @@ impl Ppu {
 
                 let pixel_value = sprite_pixel_value(
                     &sprite_data,
-                    &pattern_table,
+                    |pattern_selection, tile, x, y| {
+                        self.read_pattern_value(pattern_selection, tile, x, y as u16)
+                    },
                     self.current_scanline,
                     i,
-                    self.control.contains(PpuControl::SPRITE_8X16_MODE),
                 );
                 if self.frame_buffer[self.current_scanline as usize][x as usize] != 0xff
                     && pixel_value.unwrap_or(0) != 0
                 {
-                    drop(table);
                     self.status.insert(PpuStatus::SPRITE_0_HIT);
                     return;
                 }
@@ -911,14 +898,46 @@ impl Ppu {
     pub fn bottom_right_nametable_address(&self) -> u16 {
         self.cartridge.borrow().mirroring().real_address(0x2c00)
     }
+
+    pub fn triggers_scanline_tick(&self) -> bool {
+        if !self.is_background_rendering_enabled() && !self.is_sprite_rendering_enabled() {
+            return false;
+        }
+
+        // if self.control.contains(
+        //     PpuControl::BACKGROUND_PATTERN_TABLE_FLAG | PpuControl::SPRITE_PATTERN_TABLE_FLAG,
+        // ) {
+        //     return false;
+        // }
+
+        if !self
+            .control
+            .contains(PpuControl::BACKGROUND_PATTERN_TABLE_FLAG)
+            && !self.control.contains(PpuControl::SPRITE_PATTERN_TABLE_FLAG)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn scanline_tick_if_possible(&mut self) {
+        if self.triggers_scanline_tick() {
+            // println!("Scanline tick at {}", self.current_scanline);
+            self.cartridge.borrow_mut().scanline_tick();
+        }
+    }
+
+    pub fn get_current_dot(&self) -> u32 {
+        self.current_dot
+    }
 }
 
-fn sprite_pixel_value(
+fn sprite_pixel_value<F: Fn(PatternTableSelection, u8, u8, u8) -> u8>(
     sprite_data: &SpriteData,
-    pattern_table: &[u8],
+    read_pattern: F,
     y: u32,
     x: u8,
-    double_height_mode: bool,
 ) -> Option<u8> {
     let vertical_flip = sprite_data.flip_vertical;
     let horizontal_flip = sprite_data.flip_horizontal;
@@ -957,12 +976,11 @@ fn sprite_pixel_value(
         tile += 1;
         sprite_fine_y %= 8;
     }
-
-    let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
-    let left_tile = pattern_table[pattern_row];
-    let right_tile = pattern_table[pattern_row + 8];
-
-    let shift = if !horizontal_flip { 7 - x } else { x };
-    let and = 1 << shift;
-    Some(left_tile.bitand(and).shr(shift) + right_tile.bitand(and).shr(shift) * 2)
+    // TODO: fix y type
+    Some(read_pattern(
+        sprite_data.tile_pattern,
+        tile,
+        if horizontal_flip { 7 - x } else { x },
+        sprite_fine_y.try_into().unwrap(),
+    ))
 }
