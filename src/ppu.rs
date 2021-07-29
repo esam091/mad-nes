@@ -740,8 +740,6 @@ impl Ppu {
             7
         };
 
-        let is_double_height_mode = self.control.contains(PpuControl::SPRITE_8X16_MODE);
-
         let mut secondary_oam_indexes: Vec<usize> = Vec::new();
         let palette = self.get_color_palette().sprite_color_set;
 
@@ -770,7 +768,7 @@ impl Ppu {
                         break;
                     }
 
-                    let pixel_value = sprite_pixel_value2(
+                    let pixel_value = sprite_pixel_value(
                         &sprite,
                         |pattern_selection, tile, x, y| {
                             self.read_pattern_value(pattern_selection, tile, x, y as u16)
@@ -831,14 +829,6 @@ impl Ppu {
                 return;
             }
 
-            let table = self.pattern_tables();
-            let (left_pattern_table, right_pattern_table) = table.get_tables();
-            let pattern_table = if sprite_data.tile_pattern == PatternTableSelection::Right {
-                right_pattern_table
-            } else {
-                left_pattern_table
-            };
-
             let include_leftmost_tile = self
                 .mask
                 .contains(PpuMask::SHOW_LEFTMOST_BACKGROUND | PpuMask::SHOW_LEFTMOST_SPRITES);
@@ -856,15 +846,15 @@ impl Ppu {
 
                 let pixel_value = sprite_pixel_value(
                     &sprite_data,
-                    &pattern_table,
+                    |pattern_selection, tile, x, y| {
+                        self.read_pattern_value(pattern_selection, tile, x, y as u16)
+                    },
                     self.current_scanline,
                     i,
-                    self.control.contains(PpuControl::SPRITE_8X16_MODE),
                 );
                 if self.frame_buffer[self.current_scanline as usize][x as usize] != 0xff
                     && pixel_value.unwrap_or(0) != 0
                 {
-                    drop(table);
                     self.status.insert(PpuStatus::SPRITE_0_HIT);
                     return;
                 }
@@ -913,61 +903,7 @@ impl Ppu {
     }
 }
 
-fn sprite_pixel_value(
-    sprite_data: &SpriteData,
-    pattern_table: &[u8],
-    y: u32,
-    x: u8,
-    double_height_mode: bool,
-) -> Option<u8> {
-    let vertical_flip = sprite_data.flip_vertical;
-    let horizontal_flip = sprite_data.flip_horizontal;
-
-    let sprite_y = sprite_data.y as u32 + 1;
-
-    let sprite_height_offset = if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x16 {
-        15
-    } else {
-        7
-    };
-
-    // Check whether the scanline is in sprite's y range
-    if y < sprite_y || y > sprite_y + sprite_height_offset {
-        return None;
-    }
-
-    let mut sprite_fine_y = y - sprite_y;
-    let mut tile = sprite_data.tile_number;
-
-    if vertical_flip {
-        if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x8 {
-            sprite_fine_y = sprite_height_offset - sprite_fine_y;
-        } else {
-            // When flipping is on in 8x16 mode, the second tile is
-            // above the first tile
-            if sprite_fine_y < 8 {
-                tile += 1;
-            }
-
-            // Split the offset into two 8 pixel length
-            sprite_fine_y %= 8;
-            sprite_fine_y = 7 - sprite_fine_y;
-        }
-    } else if sprite_fine_y >= 8 {
-        tile += 1;
-        sprite_fine_y %= 8;
-    }
-
-    let pattern_row = tile as usize * 0x10 + sprite_fine_y as usize;
-    let left_tile = pattern_table[pattern_row];
-    let right_tile = pattern_table[pattern_row + 8];
-
-    let shift = if !horizontal_flip { 7 - x } else { x };
-    let and = 1 << shift;
-    Some(left_tile.bitand(and).shr(shift) + right_tile.bitand(and).shr(shift) * 2)
-}
-
-fn sprite_pixel_value2<F: Fn(PatternTableSelection, u8, u8, u8) -> u8>(
+fn sprite_pixel_value<F: Fn(PatternTableSelection, u8, u8, u8) -> u8>(
     sprite_data: &SpriteData,
     read_pattern: F,
     y: u32,
