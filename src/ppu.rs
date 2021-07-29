@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell},
+    convert::TryInto,
     ops::{BitAnd, Shr},
     rc::Rc,
 };
@@ -769,25 +770,14 @@ impl Ppu {
                         break;
                     }
 
-                    let pixel_value: Option<u8>;
-
-                    {
-                        let table = self.pattern_tables();
-                        let (left_pattern_table, right_pattern_table) = table.get_tables();
-                        let pattern_table = if sprite.tile_pattern == PatternTableSelection::Right {
-                            right_pattern_table
-                        } else {
-                            left_pattern_table
-                        };
-
-                        pixel_value = sprite_pixel_value(
-                            &sprite,
-                            pattern_table,
-                            y as u32,
-                            i,
-                            is_double_height_mode,
-                        );
-                    }
+                    let pixel_value = sprite_pixel_value2(
+                        &sprite,
+                        |pattern_selection, tile, x, y| {
+                            self.read_pattern_value(pattern_selection, tile, x, y as u16)
+                        },
+                        y as u32,
+                        i,
+                    );
 
                     let target_buffer = if sprite.draw_priority == DrawPriority::Foreground {
                         &mut self.foreground_sprite_buffer
@@ -975,4 +965,56 @@ fn sprite_pixel_value(
     let shift = if !horizontal_flip { 7 - x } else { x };
     let and = 1 << shift;
     Some(left_tile.bitand(and).shr(shift) + right_tile.bitand(and).shr(shift) * 2)
+}
+
+fn sprite_pixel_value2<F: Fn(PatternTableSelection, u8, u8, u8) -> u8>(
+    sprite_data: &SpriteData,
+    read_pattern: F,
+    y: u32,
+    x: u8,
+) -> Option<u8> {
+    let vertical_flip = sprite_data.flip_vertical;
+    let horizontal_flip = sprite_data.flip_horizontal;
+
+    let sprite_y = sprite_data.y as u32 + 1;
+
+    let sprite_height_offset = if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x16 {
+        15
+    } else {
+        7
+    };
+
+    // Check whether the scanline is in sprite's y range
+    if y < sprite_y || y > sprite_y + sprite_height_offset {
+        return None;
+    }
+
+    let mut sprite_fine_y = y - sprite_y;
+    let mut tile = sprite_data.tile_number;
+
+    if vertical_flip {
+        if sprite_data.drawing_mode == SpriteDrawingMode::Draw8x8 {
+            sprite_fine_y = sprite_height_offset - sprite_fine_y;
+        } else {
+            // When flipping is on in 8x16 mode, the second tile is
+            // above the first tile
+            if sprite_fine_y < 8 {
+                tile += 1;
+            }
+
+            // Split the offset into two 8 pixel length
+            sprite_fine_y %= 8;
+            sprite_fine_y = 7 - sprite_fine_y;
+        }
+    } else if sprite_fine_y >= 8 {
+        tile += 1;
+        sprite_fine_y %= 8;
+    }
+    // TODO: fix y type
+    Some(read_pattern(
+        sprite_data.tile_pattern,
+        tile,
+        if horizontal_flip { 7 - x } else { x },
+        sprite_fine_y.try_into().unwrap(),
+    ))
 }
