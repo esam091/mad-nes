@@ -322,7 +322,7 @@ impl Mapper for TxROM {
                 let r_index = self.bank_select & 0b111;
                 self.r[r_index as usize] = if r_index >= 6 {
                     value & 0b00111111
-                } else if r_index <= 0 {
+                } else if r_index <= 1 {
                     value & 0b11111110
                 } else {
                     value
@@ -352,13 +352,15 @@ impl Mapper for TxROM {
         let prg_flag = self.bank_select & 0x40 != 0;
         let prg_size = prg_rom.len() / 0x2000;
 
-        let mapped_address = match (address, prg_flag) {
-            (0x8000..=0x9fff, false) => address - 0x8000 + self.r[6] as u16 * 0x2000,
-            (0x8000..=0x9fff, true) => address - 0x8000 + (prg_size - 2) as u16 * 0x2000,
-            (0xa000..=0xbfff, _) => address - 0xa000 + self.r[7] as u16 * 0x2000,
-            (0xc000..=0xdfff, false) => address - 0xc000 + (prg_size - 2) as u16 * 0x2000,
-            (0xc000..=0xdfff, true) => address - 0xc000 + self.r[6] as u16 * 0x2000,
-            (0xe000..=0xffff, _) => address - 0xe000 + (prg_size - 1) as u16 * 0x2000,
+        let mapped_address: usize = match (address, prg_flag) {
+            (0x8000..=0x9fff, false) => address as usize - 0x8000 + self.r[6] as usize * 0x2000,
+            (0x8000..=0x9fff, true) => address as usize - 0x8000 + (prg_size - 2) as usize * 0x2000,
+            (0xa000..=0xbfff, _) => address as usize - 0xa000 + self.r[7] as usize * 0x2000,
+            (0xc000..=0xdfff, false) => {
+                address as usize - 0xc000 + (prg_size - 2) as usize * 0x2000
+            }
+            (0xc000..=0xdfff, true) => address as usize - 0xc000 + self.r[6] as usize * 0x2000,
+            (0xe000..=0xffff, _) => address as usize - 0xe000 + (prg_size - 1) as usize * 0x2000,
             _ => panic!("Unhandled address: {:#06X}", address),
         };
 
@@ -376,24 +378,25 @@ impl Mapper for TxROM {
         if chr_rom.len() == 0 {
             None
         } else {
-            let mapped_address = match (address, chr_flag) {
-                (0x0000..=0x07ff, false) => self.r[0] as u16 * chr_bank_size,
-                (0x0800..=0x0fff, false) => address - 0x0800 + self.r[1] as u16 * chr_bank_size,
-                (0x1000..=0x13ff, false) => address - 0x1000 + self.r[2] as u16 * chr_bank_size,
-                (0x1400..=0x17ff, false) => address - 0x1400 + self.r[3] as u16 * chr_bank_size,
-                (0x1800..=0x1bff, false) => address - 0x1800 + self.r[4] as u16 * chr_bank_size,
-                (0x1c00..=0x1fff, false) => address - 0x1c00 + self.r[5] as u16 * chr_bank_size,
+            let address = address as usize;
+            let mapped_address: usize = match (address, chr_flag) {
+                (0x0000..=0x07ff, false) => self.r[0] as usize * chr_bank_size,
+                (0x0800..=0x0fff, false) => address - 0x0800 + self.r[1] as usize * chr_bank_size,
+                (0x1000..=0x13ff, false) => address - 0x1000 + self.r[2] as usize * chr_bank_size,
+                (0x1400..=0x17ff, false) => address - 0x1400 + self.r[3] as usize * chr_bank_size,
+                (0x1800..=0x1bff, false) => address - 0x1800 + self.r[4] as usize * chr_bank_size,
+                (0x1c00..=0x1fff, false) => address - 0x1c00 + self.r[5] as usize * chr_bank_size,
 
-                (0x0000..=0x03ff, true) => self.r[2] as u16 * chr_bank_size,
-                (0x0400..=0x07ff, true) => address - 0x0400 + self.r[3] as u16 * chr_bank_size,
-                (0x0800..=0x0bff, true) => address - 0x0800 + self.r[4] as u16 * chr_bank_size,
-                (0x0c00..=0x0fff, true) => address - 0x0c00 + self.r[5] as u16 * chr_bank_size,
-                (0x1000..=0x17ff, true) => address - 0x1000 + self.r[0] as u16 * chr_bank_size,
-                (0x1800..=0x1fff, true) => address - 0x1800 + self.r[1] as u16 * chr_bank_size,
+                (0x0000..=0x03ff, true) => self.r[2] as usize * chr_bank_size,
+                (0x0400..=0x07ff, true) => address - 0x0400 + self.r[3] as usize * chr_bank_size,
+                (0x0800..=0x0bff, true) => address - 0x0800 + self.r[4] as usize * chr_bank_size,
+                (0x0c00..=0x0fff, true) => address - 0x0c00 + self.r[5] as usize * chr_bank_size,
+                (0x1000..=0x17ff, true) => address - 0x1000 + self.r[0] as usize * chr_bank_size,
+                (0x1800..=0x1fff, true) => address - 0x1800 + self.r[1] as usize * chr_bank_size,
                 _ => panic!("Unhandled address: {:#06X}", address),
             };
 
-            Some(chr_rom[mapped_address as usize])
+            Some(chr_rom[mapped_address])
         }
     }
 
