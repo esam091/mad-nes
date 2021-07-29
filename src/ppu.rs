@@ -490,8 +490,34 @@ impl Ppu {
         self.write_latch.flip();
     }
 
-    pub fn get_buffer(&self) -> &VideoMemoryBuffer {
-        &self.memory
+    fn read_pattern_at_address(&self, address: u16) -> u8 {
+        self.cartridge
+            .borrow()
+            .read_chr_rom(address)
+            .unwrap_or(self.memory[address as usize])
+    }
+
+    pub fn read_pattern_value(
+        &self,
+        pattern_selection: PatternTableSelection,
+        tile_number: u8,
+        x: u8,
+        y: u16,
+    ) -> u8 {
+        let mut address: u16 = 0;
+
+        if pattern_selection == PatternTableSelection::Right {
+            address += 0x1000;
+        }
+
+        address += tile_number as u16 * 0x10 + y as u16;
+
+        let pattern1 = self.read_pattern_at_address(address);
+        let pattern2 = self.read_pattern_at_address(address + 8);
+
+        let shift = 7 - x;
+
+        ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2
     }
 
     pub fn pattern_tables(&self) -> PatternTableRef {
@@ -500,6 +526,10 @@ impl Ppu {
             left_vram: &self.memory[0..0x1000],
             right_vram: &self.memory[0x1000..0x2000],
         }
+    }
+
+    pub fn get_buffer(&self) -> &VideoMemoryBuffer {
+        &self.memory
     }
 
     pub fn current_background_pattern_table(&self) -> PatternTableSelection {
@@ -613,32 +643,12 @@ impl Ppu {
 
                     let palette_value = palette.background_color_set[palette_set_index as usize];
 
-                    // dbg!(
-                    //     // hex_string(tile_address),
-                    //     // tile_value,
-                    //     coarse_x, // self.x,
-                    //     coarse_y, fine_y
-                    // );
-
-                    let pattern_address = tile_value as u16 * 0x10 + fine_y;
-
-                    let pattern1: u8;
-                    let pattern2: u8;
-
-                    {
-                        let tables = self.pattern_tables();
-                        let (left_pattern_table, right_pattern_table) = tables.get_tables();
-                        let pattern_table = match self.current_background_pattern_table() {
-                            PatternTableSelection::Left => left_pattern_table,
-                            PatternTableSelection::Right => right_pattern_table,
-                        };
-                        pattern1 = pattern_table[pattern_address as usize];
-                        pattern2 = pattern_table[pattern_address as usize + 8];
-                    }
-
-                    let shift = 7 - self.current_fine_x;
-
-                    let bit = ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2;
+                    let bit = self.read_pattern_value(
+                        self.current_background_pattern_table(),
+                        tile_value,
+                        self.current_fine_x,
+                        fine_y,
+                    );
 
                     // dbg!(bit);
 
