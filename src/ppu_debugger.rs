@@ -62,221 +62,37 @@ impl<'a> PpuDebugger<'a> {
             PatternTableSelection::Right => &right_pattern_bank,
         };
 
-        canvas
-            .with_texture_canvas(&mut self.top_left_nametable, |canvas| {
-                let (r, g, b, _) = PALETTE[raw_palette.background as usize];
+        render_debug_nametable(
+            canvas,
+            &mut self.top_left_nametable,
+            ppu,
+            ppu.top_left_nametable_address(),
+            &current_pattern_bank,
+        );
 
-                canvas.set_draw_color(Color::RGB(r, g, b));
-                canvas.clear();
+        render_debug_nametable(
+            canvas,
+            &mut self.top_right_nametable,
+            ppu,
+            ppu.top_right_nametable_address(),
+            &current_pattern_bank,
+        );
 
-                let current_nametable = ppu.top_left_nametable_address() as usize;
-                let current_attribute_table = current_nametable + 0x3c0;
+        render_debug_nametable(
+            canvas,
+            &mut self.bottom_left_nametable,
+            ppu,
+            ppu.bottom_left_nametable_address(),
+            &current_pattern_bank,
+        );
 
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + current_nametable;
-
-                        let nametable_value = video_buffer[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (0, 1) => bottom_left,
-                            (1, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        current_pattern_bank.render_tile(
-                            canvas,
-                            nametable_value,
-                            palette_set_index,
-                            Rect::new(xx * 8, yy * 8, 8, 8),
-                        );
-                    }
-                }
-
-                // canvas.copy(debug_texture, None, None).unwrap();
-            })
-            .unwrap();
-
-        canvas
-            .with_texture_canvas(&mut self.top_right_nametable, |canvas| {
-                let (r, g, b, _) = PALETTE[raw_palette.background as usize];
-
-                canvas.set_draw_color(Color::RGB(r, g, b));
-                canvas.clear();
-
-                let current_nametable = ppu.top_right_nametable_address() as usize;
-                let current_attribute_table = current_nametable + 0x3c0;
-
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + current_nametable;
-
-                        let nametable_value = video_buffer[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (0, 1) => bottom_left,
-                            (1, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        current_pattern_bank.render_tile(
-                            canvas,
-                            nametable_value,
-                            palette_set_index,
-                            Rect::new(xx * 8, yy * 8, 8, 8),
-                        );
-                    }
-                }
-
-                // canvas.copy(debug_texture, None, None).unwrap();
-            })
-            .unwrap();
-
-        canvas
-            .with_texture_canvas(&mut self.bottom_left_nametable, |canvas| {
-                let (r, g, b, _) = PALETTE[raw_palette.background as usize];
-
-                canvas.set_draw_color(Color::RGB(r, g, b));
-                canvas.clear();
-
-                let current_nametable = ppu.bottom_left_nametable_address() as usize;
-                let current_attribute_table = current_nametable + 0x3c0;
-
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + current_nametable;
-
-                        let nametable_value = video_buffer[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (0, 1) => bottom_left,
-                            (1, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        current_pattern_bank.render_tile(
-                            canvas,
-                            nametable_value,
-                            palette_set_index,
-                            Rect::new(xx * 8, yy * 8, 8, 8),
-                        );
-                    }
-                }
-
-                // canvas.copy(debug_texture, None, None).unwrap();
-            })
-            .unwrap();
-
-        canvas
-            .with_texture_canvas(&mut self.bottom_right_nametable, |canvas| {
-                let (r, g, b, _) = PALETTE[raw_palette.background as usize];
-
-                canvas.set_draw_color(Color::RGB(r, g, b));
-                canvas.clear();
-
-                let current_nametable = ppu.bottom_right_nametable_address() as usize;
-                let current_attribute_table = current_nametable + 0x3c0;
-
-                for row in 0..30 {
-                    for col in 0..32 {
-                        let nametable_address = row * 32 + col + current_nametable;
-
-                        let nametable_value = video_buffer[nametable_address];
-
-                        let attribute_y = row / 4;
-                        let attribute_x = col / 4;
-
-                        let attribute_value =
-                            video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
-
-                        let top_left = attribute_value & 0b11;
-                        let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
-                        let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
-                        let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
-
-                        let subtile_y = row % 4;
-                        let subtile_x = col % 4;
-
-                        let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
-                            (0, 0) => top_left,
-                            (1, 0) => top_right,
-                            (0, 1) => bottom_left,
-                            (1, 1) => bottom_right,
-                            _ => panic!("Impossible subtile location!"),
-                        };
-
-                        let xx: i32 = col.try_into().unwrap();
-                        let yy: i32 = row.try_into().unwrap();
-
-                        current_pattern_bank.render_tile(
-                            canvas,
-                            nametable_value,
-                            palette_set_index,
-                            Rect::new(xx * 8, yy * 8, 8, 8),
-                        );
-                    }
-                }
-
-                // canvas.copy(debug_texture, None, None).unwrap();
-            })
-            .unwrap();
+        render_debug_nametable(
+            canvas,
+            &mut self.bottom_right_nametable,
+            ppu,
+            ppu.bottom_right_nametable_address(),
+            &current_pattern_bank,
+        );
 
         canvas
             .copy(&self.top_left_nametable, None, game_size_rect(0, 0))
@@ -313,4 +129,69 @@ impl<'a> PpuDebugger<'a> {
 
 fn game_size_rect(x: i32, y: i32) -> Rect {
     Rect::new(x, y, 384, 360)
+}
+
+fn render_debug_nametable(
+    canvas: &mut WindowCanvas,
+    texture: &mut Texture,
+    ppu: &Ppu,
+    nametable_address: u16,
+    current_pattern_bank: &PatternBank,
+) {
+    let raw_palette = ppu.get_color_palette();
+    let video_buffer = ppu.get_buffer();
+
+    canvas
+        .with_texture_canvas(texture, |canvas| {
+            let (r, g, b, _) = PALETTE[raw_palette.background as usize];
+
+            canvas.set_draw_color(Color::RGB(r, g, b));
+            canvas.clear();
+
+            let current_nametable = nametable_address as usize;
+            let current_attribute_table = current_nametable + 0x3c0;
+
+            for row in 0..30 {
+                for col in 0..32 {
+                    let nametable_address = row * 32 + col + current_nametable;
+
+                    let nametable_value = video_buffer[nametable_address];
+
+                    let attribute_y = row / 4;
+                    let attribute_x = col / 4;
+
+                    let attribute_value =
+                        video_buffer[current_attribute_table + attribute_x + attribute_y * 8];
+
+                    let top_left = attribute_value & 0b11;
+                    let top_right = attribute_value.bitand(0b1100 as u8) >> 2;
+                    let bottom_left = attribute_value.bitand(0b110000 as u8) >> 4;
+                    let bottom_right = attribute_value.bitand(0b11000000 as u8) >> 6;
+
+                    let subtile_y = row % 4;
+                    let subtile_x = col % 4;
+
+                    let palette_set_index = match (subtile_x / 2, subtile_y / 2) {
+                        (0, 0) => top_left,
+                        (1, 0) => top_right,
+                        (0, 1) => bottom_left,
+                        (1, 1) => bottom_right,
+                        _ => panic!("Impossible subtile location!"),
+                    };
+
+                    let xx: i32 = col.try_into().unwrap();
+                    let yy: i32 = row.try_into().unwrap();
+
+                    current_pattern_bank.render_tile(
+                        canvas,
+                        nametable_value,
+                        palette_set_index,
+                        Rect::new(xx * 8, yy * 8, 8, 8),
+                    );
+                }
+            }
+
+            // canvas.copy(debug_texture, None, None).unwrap();
+        })
+        .unwrap();
 }
