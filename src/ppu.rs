@@ -181,19 +181,6 @@ pub struct PatternTableRef<'a> {
     right_vram: &'a [u8],
 }
 
-impl<'a, 'b> PatternTableRef<'a> {
-    pub fn get_tables(&'b self) -> (&'b [u8], &'b [u8])
-    where
-        'a: 'b,
-    {
-        let asd = self.cartridge.pattern_tables();
-        match asd {
-            Some(tables) => tables,
-            None => (self.left_vram, self.right_vram),
-        }
-    }
-}
-
 pub struct ColorPalette {
     pub background: u8,
     pub background_color_set: [[u8; 3]; 4],
@@ -519,14 +506,6 @@ impl Ppu {
         let shift = 7 - x;
 
         ((pattern1 >> shift) & 1) + ((pattern2 >> shift) & 1) * 2
-    }
-
-    pub fn pattern_tables(&self) -> PatternTableRef {
-        PatternTableRef {
-            cartridge: self.cartridge.borrow(),
-            left_vram: &self.memory[0..0x1000],
-            right_vram: &self.memory[0x1000..0x2000],
-        }
     }
 
     pub fn get_buffer(&self) -> &VideoMemoryBuffer {

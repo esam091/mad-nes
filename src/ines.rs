@@ -9,7 +9,6 @@ fn prg_bank_size(bytes: &[u8]) -> usize {
 pub trait Mapper {
     fn write_address(&mut self, prg_rom: &[u8], address: u16, value: u8);
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])>;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
     fn mirroring(&self) -> Option<Mirroring>;
 }
@@ -36,18 +35,6 @@ impl Mapper for CNROM {
             prg_rom[address as usize - 0x8000]
         } else {
             prg_rom[address as usize - 0xc000]
-        }
-    }
-
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.is_empty() {
-            None
-        } else {
-            let start = self.chr_bank * 0x2000;
-            Some((
-                &chr_rom[start..start + 0x1000],
-                &chr_rom[start + 0x1000..start + 0x2000],
-            ))
         }
     }
 
@@ -167,19 +154,6 @@ impl Mapper for SNROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.is_empty() {
-            return None;
-        }
-
-        let (bank1, bank2) = self.bank_addresses();
-
-        Some((
-            &chr_rom[bank1..bank1 + 0x1000],
-            &chr_rom[bank2..bank2 + 0x1000],
-        ))
-    }
-
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.is_empty() {
             return None;
@@ -224,14 +198,6 @@ impl Mapper for NROM {
         }
     }
 
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        if chr_rom.len() == 0 {
-            None
-        } else {
-            Some((&chr_rom[0..0x1000], &chr_rom[0x1000..]))
-        }
-    }
-
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
         if chr_rom.len() != 0 {
             Some(chr_rom[address as usize])
@@ -272,10 +238,6 @@ impl Mapper for UNROM {
             // 0xc000..=0xffff => self.prg_rom[address as usize],
             _ => panic!("Unimplemented address read: {:#06X}", address),
         }
-    }
-
-    fn pattern_tables<'a>(&self, _chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        None
     }
 
     fn read_chr_rom(&self, _chr_rom: &[u8], _address: u16) -> Option<u8> {
@@ -342,7 +304,7 @@ impl Mapper for TxROM {
             (0xe000..=0xffff, false) => self.irq_enabled = false,
             (0xe000..=0xffff, true) => {
                 self.irq_enabled = true;
-                todo!("irq is enabled but not implemented")
+                // todo!("irq is enabled but not implemented")
             }
             _ => {}
         }
@@ -365,10 +327,6 @@ impl Mapper for TxROM {
         };
 
         prg_rom[mapped_address as usize]
-    }
-
-    fn pattern_tables<'a>(&self, chr_rom: &'a [u8]) -> Option<(&'a [u8], &'a [u8])> {
-        todo!()
     }
 
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8> {
@@ -419,10 +377,6 @@ impl Cartridge {
 
     pub fn read_address(&mut self, address: u16) -> u8 {
         self.mapper.read_address(&self.prg_rom, address)
-    }
-
-    pub fn pattern_tables<'a>(&'a self) -> Option<(&'a [u8], &'a [u8])> {
-        self.mapper.pattern_tables(&self.chr_rom)
     }
 
     pub fn read_chr_rom(&self, address: u16) -> Option<u8> {
