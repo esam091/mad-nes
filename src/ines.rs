@@ -380,14 +380,14 @@ impl Mapper for TxROM {
         } else {
             let address = address as usize;
             let mapped_address: usize = match (address, chr_flag) {
-                (0x0000..=0x07ff, false) => self.r[0] as usize * chr_bank_size,
+                (0x0000..=0x07ff, false) => address + self.r[0] as usize * chr_bank_size,
                 (0x0800..=0x0fff, false) => address - 0x0800 + self.r[1] as usize * chr_bank_size,
                 (0x1000..=0x13ff, false) => address - 0x1000 + self.r[2] as usize * chr_bank_size,
                 (0x1400..=0x17ff, false) => address - 0x1400 + self.r[3] as usize * chr_bank_size,
                 (0x1800..=0x1bff, false) => address - 0x1800 + self.r[4] as usize * chr_bank_size,
                 (0x1c00..=0x1fff, false) => address - 0x1c00 + self.r[5] as usize * chr_bank_size,
 
-                (0x0000..=0x03ff, true) => self.r[2] as usize * chr_bank_size,
+                (0x0000..=0x03ff, true) => address + self.r[2] as usize * chr_bank_size,
                 (0x0400..=0x07ff, true) => address - 0x0400 + self.r[3] as usize * chr_bank_size,
                 (0x0800..=0x0bff, true) => address - 0x0800 + self.r[4] as usize * chr_bank_size,
                 (0x0c00..=0x0fff, true) => address - 0x0c00 + self.r[5] as usize * chr_bank_size,

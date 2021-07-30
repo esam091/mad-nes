@@ -26,6 +26,9 @@ pub struct PpuDebugger<'a> {
     top_right_nametable: Texture<'a>,
     bottom_left_nametable: Texture<'a>,
     bottom_right_nametable: Texture<'a>,
+
+    left_pattern_table: Texture<'a>,
+    right_pattern_table: Texture<'a>,
 }
 
 impl<'a> PpuDebugger<'a> {
@@ -59,6 +62,18 @@ impl<'a> PpuDebugger<'a> {
             ppu.bottom_right_nametable_address(),
         );
 
+        render_pattern_table(
+            &mut self.left_pattern_table,
+            ppu,
+            PatternTableSelection::Left,
+        );
+
+        render_pattern_table(
+            &mut self.right_pattern_table,
+            ppu,
+            PatternTableSelection::Right,
+        );
+
         canvas
             .copy(&self.top_left_nametable, None, game_size_rect(0, 0))
             .unwrap();
@@ -72,6 +87,18 @@ impl<'a> PpuDebugger<'a> {
 
         canvas
             .copy(&self.bottom_right_nametable, None, game_size_rect(389, 365))
+            .unwrap();
+
+        canvas
+            .copy(&self.left_pattern_table, None, Rect::new(800, 20, 256, 256))
+            .unwrap();
+
+        canvas
+            .copy(
+                &self.right_pattern_table,
+                None,
+                Rect::new(800, 300, 256, 256),
+            )
             .unwrap();
 
         canvas.present();
@@ -88,6 +115,12 @@ impl<'a> PpuDebugger<'a> {
             top_right_nametable: create_screen_texture(&texture_creator),
             bottom_left_nametable: create_screen_texture(&texture_creator),
             bottom_right_nametable: create_screen_texture(&texture_creator),
+            left_pattern_table: texture_creator
+                .create_texture_target(None, 128, 128)
+                .unwrap(),
+            right_pattern_table: texture_creator
+                .create_texture_target(None, 128, 128)
+                .unwrap(),
         }
     }
 }
@@ -172,4 +205,41 @@ fn render_debug_nametable(texture: &mut Texture, ppu: &Ppu, nametable_address: u
     texture
         .update(Rect::new(0, 0, 256, 240), &texture_buffer, 256 * 4)
         .unwrap();
+}
+
+fn render_pattern_table(texture: &mut Texture, ppu: &Ppu, pattern_table: PatternTableSelection) {
+    let palette = ppu.get_color_palette();
+    let mut buffer = [[0u8; 128]; 128];
+    for row in 0u8..16 {
+        for col in 0u8..16 {
+            let tile = row * 16 + col;
+
+            for y in 0u8..8 {
+                for x in 0u8..8 {
+                    let pattern_value = ppu.read_pattern_value(pattern_table, tile, x, y as u16);
+                    buffer[row as usize * 8 + y as usize][col as usize * 8 + x as usize] =
+                        if pattern_value == 0 {
+                            palette.background
+                        } else {
+                            palette.background_color_set[0][pattern_value as usize - 1]
+                        };
+                }
+            }
+        }
+    }
+
+    let mut texture_buffer = [0u8; 128 * 128 * 4];
+    for y in 0..128 {
+        for x in 0..128 {
+            let (r, g, b, a) = PALETTE[buffer[y][x] as usize];
+
+            let start_index = (y * 128 + x) * 4;
+            texture_buffer[start_index] = b;
+            texture_buffer[start_index + 1] = g;
+            texture_buffer[start_index + 2] = r;
+            texture_buffer[start_index + 3] = a;
+        }
+    }
+
+    texture.update(None, &texture_buffer, 128 * 4).unwrap();
 }

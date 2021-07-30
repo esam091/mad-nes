@@ -750,7 +750,7 @@ impl Ppu {
             for index in 0..sprites.len() {
                 let sprite = &sprites[index];
 
-                if sprite.y + 1 <= y && y <= sprite.y + 1 + sprite_height {
+                if sprite.y as u16 + 1 <= y && y <= sprite.y as u16 + 1 + sprite_height {
                     secondary_oam_indexes.push(index);
                 }
 
