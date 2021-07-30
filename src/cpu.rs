@@ -72,6 +72,14 @@ impl Cpu {
         self.pc = self.nmi_vector;
     }
 
+    pub fn enter_irq(&mut self) {
+        println!("enter irq");
+        let addresses = self.pc.to_le_bytes();
+        self.push(addresses[1]);
+        self.push(addresses[0]);
+        self.push(self.p.bitand(!(1 << 5)));
+        self.pc = self.irq_vector;
+    }
     pub fn step(&mut self) -> CpuResult {
         let instruction = Instruction::from_bytes(self)
             .map_err(|opcode| {

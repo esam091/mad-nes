@@ -56,9 +56,20 @@ impl Machine {
         self.pending_cycles -= 1;
 
         let mut should_render = false;
+        let mut has_pending_irq = false;
         for _ in 0..3 {
             let result = self.cpu.bus.ppu.step();
+
+            // TODO: probably better to enter nmi and irq here instead of below
             should_render = should_render || result;
+
+            has_pending_irq = has_pending_irq
+                || (self.cpu.bus.cartridge.borrow().has_pending_irq()
+                    && self.cpu.bus.ppu.get_current_dot() == 260);
+        }
+
+        if has_pending_irq {
+            self.cpu.enter_irq();
         }
 
         if should_render {
@@ -69,6 +80,7 @@ impl Machine {
 
             return Some(SideEffect::Render);
         }
+
         None
     }
 

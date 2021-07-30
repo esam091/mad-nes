@@ -695,6 +695,8 @@ impl Ppu {
                 self.status.insert(PpuStatus::IN_VBLANK);
                 should_render = true
             }
+            (0..=239, 260) => self.scanline_tick_if_possible(),
+            (261, 260) => self.scanline_tick_if_possible(),
             _ => {}
         }
 
@@ -879,6 +881,46 @@ impl Ppu {
 
     pub fn bottom_right_nametable_address(&self) -> u16 {
         self.cartridge.borrow().mirroring().real_address(0x2c00)
+    }
+
+    pub fn triggers_scanline_tick(&self) -> bool {
+        // rendering is on
+        // bg and sprite uses different table
+        // handle 8x16
+
+        if !self
+            .mask
+            .contains(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES)
+        {
+            return false;
+        }
+
+        if self.control.contains(
+            PpuControl::BACKGROUND_PATTERN_TABLE_FLAG | PpuControl::SPRITE_PATTERN_TABLE_FLAG,
+        ) {
+            return false;
+        }
+
+        if !self
+            .control
+            .contains(PpuControl::BACKGROUND_PATTERN_TABLE_FLAG)
+            && !self.control.contains(PpuControl::SPRITE_PATTERN_TABLE_FLAG)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    fn scanline_tick_if_possible(&mut self) {
+        if self.triggers_scanline_tick() {
+            println!("Scanline tick at {}", self.current_scanline);
+            self.cartridge.borrow_mut().scanline_tick();
+        }
+    }
+
+    pub fn get_current_dot(&self) -> u32 {
+        self.current_dot
     }
 }
 

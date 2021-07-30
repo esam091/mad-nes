@@ -11,6 +11,8 @@ pub trait Mapper {
     fn read_address(&mut self, prg_rom: &[u8], address: u16) -> u8;
     fn read_chr_rom(&self, chr_rom: &[u8], address: u16) -> Option<u8>;
     fn mirroring(&self) -> Option<Mirroring>;
+    fn scanline_tick(&mut self);
+    fn has_pending_irq(&self) -> bool;
 }
 
 struct CNROM {
@@ -48,6 +50,12 @@ impl Mapper for CNROM {
 
     fn mirroring(&self) -> Option<Mirroring> {
         None
+    }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
     }
 }
 
@@ -177,6 +185,12 @@ impl Mapper for SNROM {
             _ => panic!("Unsupported mirror: {:#04X}", self.control),
         }
     }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
+    }
 }
 
 struct NROM;
@@ -208,6 +222,12 @@ impl Mapper for NROM {
 
     fn mirroring(&self) -> Option<Mirroring> {
         None
+    }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
     }
 }
 
@@ -247,15 +267,23 @@ impl Mapper for UNROM {
     fn mirroring(&self) -> Option<Mirroring> {
         None
     }
+
+    fn scanline_tick(&mut self) {}
+
+    fn has_pending_irq(&self) -> bool {
+        false
+    }
 }
 
 struct TxROM {
     bank_select: u8,
     r: [u8; 8],
     mirroring: Mirroring,
-    irq_latch: u8,
-    irq_reload: bool,
+    irq_reload_value: u8,
+    irq_reset: bool,
     irq_enabled: bool,
+    current_irq_counter: u8,
+    has_pending_irq: bool,
 }
 
 impl TxROM {
@@ -264,21 +292,23 @@ impl TxROM {
             bank_select: 0,
             r: [0; 8],
             mirroring: Mirroring::Vertical,
-            irq_latch: 0,
-            irq_reload: false,
+            irq_reload_value: 0,
+            irq_reset: false,
             irq_enabled: false,
+            current_irq_counter: 0,
+            has_pending_irq: false,
         }
     }
 }
 
 impl Mapper for TxROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
+        // println!("TxROM write {:#06X}: {:#04X}", address, value);
         let is_odd = address % 2 != 0;
 
         match (address, is_odd) {
             (0x8000..=0x9fff, false) => {
                 self.bank_select = value;
-                println!("TxROM write {:#06X}: {:#04X}", address, value);
             }
             (0x8000..=0x9fff, true) => {
                 let r_index = self.bank_select & 0b111;
@@ -290,7 +320,7 @@ impl Mapper for TxROM {
                     value
                 };
 
-                println!("Write bank {}: {:#04X}", r_index, value);
+                // println!("Write bank {}: {:#04X}", r_index, value);
             }
             (0xa000..=0xbfff, false) => {
                 self.mirroring = if value & 1 == 0 {
@@ -299,13 +329,11 @@ impl Mapper for TxROM {
                     Mirroring::Horizontal
                 }
             }
-            (0xc000..=0xdfff, false) => self.irq_latch = value,
-            (0xc000..=0xdfff, true) => self.irq_reload = true,
+            (0xc000..=0xdfff, false) => self.irq_reload_value = value,
+            (0xc000..=0xdfff, true) => self.irq_reset = true,
             (0xe000..=0xffff, false) => self.irq_enabled = false,
-            (0xe000..=0xffff, true) => {
-                self.irq_enabled = true;
-                // todo!("irq is enabled but not implemented")
-            }
+            (0xe000..=0xffff, true) => self.irq_enabled = true,
+
             _ => {}
         }
     }
@@ -361,6 +389,23 @@ impl Mapper for TxROM {
     fn mirroring(&self) -> Option<Mirroring> {
         Some(self.mirroring)
     }
+
+    fn scanline_tick(&mut self) {
+        if self.irq_reset {
+            self.current_irq_counter = self.irq_reload_value;
+            self.irq_reset = false;
+        } else {
+            if self.current_irq_counter == 0 {
+                self.current_irq_counter = self.irq_reload_value;
+            }
+
+            self.current_irq_counter -= 1;
+        }
+    }
+
+    fn has_pending_irq(&self) -> bool {
+        self.irq_enabled && self.current_irq_counter == 0
+    }
 }
 
 pub struct Cartridge {
@@ -385,6 +430,14 @@ impl Cartridge {
 
     pub fn mirroring(&self) -> Mirroring {
         self.mapper.mirroring().unwrap_or(self.mirroring)
+    }
+
+    pub fn scanline_tick(&mut self) {
+        self.mapper.scanline_tick()
+    }
+
+    pub fn has_pending_irq(&self) -> bool {
+        self.mapper.has_pending_irq()
     }
 }
 
