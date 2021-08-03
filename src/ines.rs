@@ -299,6 +299,12 @@ impl TxROM {
             has_pending_irq: false,
         }
     }
+
+    fn toggle_pending_irq_if_possible(&mut self) {
+        if self.current_irq_counter == 0 && self.irq_enabled {
+            self.has_pending_irq = true;
+        }
+    }
 }
 
 impl Mapper for TxROM {
@@ -406,20 +412,20 @@ impl Mapper for TxROM {
         if self.irq_reset {
             self.current_irq_counter = self.irq_reload_value;
             self.irq_reset = false;
+
+            self.toggle_pending_irq_if_possible();
             // println!("Reload counter to {}", self.current_irq_counter);
         } else {
             if self.current_irq_counter == 0 {
                 self.current_irq_counter = self.irq_reload_value;
+
+                self.toggle_pending_irq_if_possible();
             } else {
                 if self.current_irq_counter > 0 {
                     self.current_irq_counter -= 1;
                 }
                 dbg!(self.current_irq_counter);
-                if self.irq_enabled && self.current_irq_counter == 0 {
-                    // println!("IRQ on");
-                    self.has_pending_irq = true;
-                    // self.current_irq_counter = self.irq_reload_value;
-                }
+                self.toggle_pending_irq_if_possible();
             }
         }
     }
