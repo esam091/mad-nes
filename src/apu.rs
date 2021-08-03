@@ -529,7 +529,8 @@ struct FrameCounter {
     cpu_cycles: usize,
     reset: bool,
     mode_flag: bool,
-    irq_flag: bool,
+    irq_inhibit_flag: bool,
+    irq_pending: bool,
 }
 
 const QUARTER_CYCLES: usize = 7457;
@@ -540,13 +541,18 @@ impl FrameCounter {
             cpu_cycles: 0,
             reset: false,
             mode_flag: false,
-            irq_flag: false,
+            irq_inhibit_flag: false,
+            irq_pending: false,
         }
     }
 
     fn step(&mut self) {
         self.cpu_cycles += 1;
         self.reset = false;
+
+        if self.can_toggle_irq() {
+            self.irq_pending = true;
+        }
     }
 
     fn is_clocking_half_frame(&self) -> bool {
@@ -593,7 +599,22 @@ impl FrameCounter {
         self.reset = true;
         self.cpu_cycles = 0;
         self.mode_flag = value & 0x80 != 0;
-        self.irq_flag = value & 0x40 != 0;
+        self.irq_inhibit_flag = value & 0x40 != 0;
+    }
+
+    fn can_toggle_irq(&self) -> bool {
+        !self.mode_flag
+            && !self.irq_inhibit_flag
+            && self.get_quarter_blocks() % 4 == 3
+            && self.cpu_cycles % QUARTER_CYCLES == 0
+    }
+
+    fn has_pending_irq(&self) -> bool {
+        self.irq_pending
+    }
+
+    fn clear_pending_interrupt(&mut self) {
+        self.irq_pending = false;
     }
 }
 
@@ -783,7 +804,7 @@ impl Apu {
         }
     }
 
-    pub fn half_step(&mut self) {
+    pub fn half_step(&mut self) -> bool {
         self.triangle_channel.step();
 
         if self.frame_counter.is_clocking_half_frame() {
@@ -842,6 +863,8 @@ impl Apu {
 
         self.half_cycle_count += 1;
         self.frame_counter.step();
+
+        self.frame_counter.has_pending_irq()
     }
 
     pub fn write_noise_envelope(&mut self, value: u8) {
@@ -936,8 +959,10 @@ impl Apu {
         // TODO: handleframe interrupt
     }
 
-    pub fn read_status(&self) -> u8 {
+    pub fn read_status(&mut self) -> u8 {
         let mut status = ApuStatus::empty();
+
+        self.frame_counter.clear_pending_interrupt();
 
         status.set(ApuStatus::PULSE_1, self.pulse1_channel.is_running());
         status.set(ApuStatus::PULSE_2, self.pulse2_channel.is_running());
