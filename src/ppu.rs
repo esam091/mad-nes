@@ -326,11 +326,7 @@ impl Ppu {
                     .read_chr_rom(real_address)
                     .unwrap_or(self.memory[real_address as usize])
             } else {
-                let real_address = self
-                    .cartridge
-                    .borrow()
-                    .mirroring()
-                    .real_address(real_address);
+                let real_address = cartridge.mirroring().real_address(real_address);
                 self.memory[real_address as usize]
             };
 
