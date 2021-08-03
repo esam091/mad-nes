@@ -684,14 +684,14 @@ impl DmcChannel {
                 }
             }
 
-            self.bits_left -= 1;
-            self.shift_register >>= 1;
-
             if self.bits_left == 0 {
                 self.bits_left = 8;
                 self.shift_register = self.sample_buffer.unwrap_or(0);
                 self.silence = self.sample_buffer == None;
                 self.sample_buffer = None;
+            } else {
+                self.bits_left -= 1;
+                self.shift_register >>= 1;
             }
 
             if self.current_length > 0 && self.sample_buffer == None {
@@ -1006,6 +1006,10 @@ impl Apu {
 
     pub fn set_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
         self.dmc_channel.set_cartridge(cartridge);
+    }
+
+    pub fn has_pending_irq(&self) -> bool {
+        self.frame_counter.has_pending_irq()
     }
 }
 

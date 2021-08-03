@@ -47,16 +47,22 @@ impl Machine {
 
     pub fn step(&mut self) -> Option<SideEffect> {
         if self.pending_cycles == 0 {
+            if self.cpu.bus.apu.has_pending_irq() {
+                self.cpu.enter_irq();
+            }
+
             let result = self.cpu.step();
             let cycles = result.cycles_elapsed;
             self.pending_cycles = cycles;
         }
 
-        self.cpu.bus.apu.half_step();
         self.pending_cycles -= 1;
 
-        let mut should_render = false;
+        self.cpu.bus.apu.half_step();
+
         let mut has_pending_irq = false;
+        let mut should_render = false;
+
         for _ in 0..3 {
             let result = self.cpu.bus.ppu.step();
 
@@ -69,6 +75,10 @@ impl Machine {
         }
 
         if has_pending_irq {
+            // println!(
+            //     "enter irq at scanline {}",
+            //     self.cpu.bus.ppu.get_current_scanline()
+            // );
             self.cpu.enter_irq();
         }
 
