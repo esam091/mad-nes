@@ -313,10 +313,14 @@ impl Ppu {
             self.read_buffer = self.memory[self.v as usize - 0x1000];
 
             self.v = self.v.wrapping_add(self.control.address_increment());
+            if self.v >= 0x1000 && self.v < 0x2000 {
+                // println!("Clock counter!");
+                self.cartridge.borrow_mut().scanline_tick();
+            }
 
             value
         } else {
-            let cartridge = self.cartridge.borrow();
+            let mut cartridge = self.cartridge.borrow_mut();
             let value = if real_address < 0x2000 {
                 cartridge
                     .read_chr_rom(real_address)
@@ -332,6 +336,10 @@ impl Ppu {
 
             self.read_buffer = value;
             self.v = self.v.wrapping_add(self.control.address_increment());
+            if self.v >= 0x1000 && self.v < 0x2000 {
+                // println!("Clock counter!");
+                cartridge.scanline_tick();
+            }
 
             last_buffer
         }
@@ -365,6 +373,11 @@ impl Ppu {
         }
 
         self.v = self.v.wrapping_add(self.control.address_increment());
+
+        if self.v >= 0x1000 && self.v < 0x2000 {
+            // println!("Clock counter!");
+            self.cartridge.borrow_mut().scanline_tick();
+        }
     }
 
     pub fn write_scroll(&mut self, position: u8) {
