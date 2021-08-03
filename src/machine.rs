@@ -21,6 +21,10 @@ pub struct Machine {
 }
 
 impl Machine {
+    fn has_pending_irq(&self) -> bool {
+        self.cpu.bus.apu.has_pending_irq() || self.cpu.bus.cartridge.borrow().has_pending_irq()
+    }
+
     pub fn load(file_path: &String, mut apu: Apu) -> Result<Machine, std::io::Error> {
         // todo: fix error type
         let cartridge = load_cartridge(file_path).ok().unwrap();
@@ -47,7 +51,7 @@ impl Machine {
 
     pub fn step(&mut self) -> Option<SideEffect> {
         if self.pending_cycles == 0 {
-            if self.cpu.bus.apu.has_pending_irq() {
+            if self.has_pending_irq() {
                 self.cpu.enter_irq();
             }
 
@@ -60,7 +64,6 @@ impl Machine {
 
         self.cpu.bus.apu.half_step();
 
-        let mut has_pending_irq = false;
         let mut should_render = false;
 
         for _ in 0..3 {
@@ -68,18 +71,6 @@ impl Machine {
 
             // TODO: probably better to enter nmi and irq here instead of below
             should_render = should_render || result;
-
-            has_pending_irq = has_pending_irq
-                || (self.cpu.bus.cartridge.borrow().has_pending_irq()
-                    && self.cpu.bus.ppu.get_current_dot() == 260);
-        }
-
-        if has_pending_irq {
-            // println!(
-            //     "enter irq at scanline {}",
-            //     self.cpu.bus.ppu.get_current_scanline()
-            // );
-            self.cpu.enter_irq();
         }
 
         if should_render {

@@ -303,7 +303,9 @@ impl TxROM {
 
 impl Mapper for TxROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
-        // println!("TxROM write {:#06X}: {:#04X}", address, value);
+        if address >= 0xc000 {
+            println!("TxROM write {:#06X}: {:#04X}", address, value);
+        }
         let is_odd = address % 2 != 0;
 
         match (address, is_odd) {
@@ -330,9 +332,19 @@ impl Mapper for TxROM {
                 }
             }
             (0xc000..=0xdfff, false) => self.irq_reload_value = value,
-            (0xc000..=0xdfff, true) => self.irq_reset = true,
-            (0xe000..=0xffff, false) => self.irq_enabled = false,
-            (0xe000..=0xffff, true) => self.irq_enabled = true,
+            (0xc000..=0xdfff, true) => {
+                self.irq_reset = true;
+                // println!("Reset irq counter");
+            }
+            (0xe000..=0xffff, false) => {
+                // println!("disable IRQ");
+                self.irq_enabled = false;
+                self.has_pending_irq = false;
+            }
+            (0xe000..=0xffff, true) => {
+                self.irq_enabled = true;
+                // println!("enable IRQ");
+            }
 
             _ => {}
         }
@@ -394,17 +406,26 @@ impl Mapper for TxROM {
         if self.irq_reset {
             self.current_irq_counter = self.irq_reload_value;
             self.irq_reset = false;
+            // println!("Reload counter to {}", self.current_irq_counter);
         } else {
             if self.current_irq_counter == 0 {
                 self.current_irq_counter = self.irq_reload_value;
+            } else {
+                if self.current_irq_counter > 0 {
+                    self.current_irq_counter -= 1;
+                }
+                dbg!(self.current_irq_counter);
+                if self.irq_enabled && self.current_irq_counter == 0 {
+                    // println!("IRQ on");
+                    self.has_pending_irq = true;
+                    // self.current_irq_counter = self.irq_reload_value;
+                }
             }
-
-            self.current_irq_counter -= 1;
         }
     }
 
     fn has_pending_irq(&self) -> bool {
-        self.irq_enabled && self.current_irq_counter == 0
+        self.has_pending_irq
     }
 }
 

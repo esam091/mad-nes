@@ -472,6 +472,11 @@ impl Ppu {
                 self.t &= 0xff00;
                 self.t |= address as u16;
                 self.v = self.t;
+
+                if self.v >= 0x1000 && self.v < 0x2000 {
+                    // println!("Clock counter!");
+                    self.cartridge.borrow_mut().scanline_tick();
+                }
             }
         }
 
@@ -888,10 +893,7 @@ impl Ppu {
         // bg and sprite uses different table
         // handle 8x16
 
-        if !self
-            .mask
-            .contains(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES)
-        {
+        if !self.is_background_rendering_enabled() && !self.is_sprite_rendering_enabled() {
             return false;
         }
 
