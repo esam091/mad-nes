@@ -75,21 +75,21 @@ impl Cpu {
 
     pub fn enter_irq(&mut self) {
         if !self.is_interrupt_disable_flag_on() {
-            self.set_interrupt_flag(true);
+            self.set_interrupt_disable_flag(true);
             let addresses = self.pc.to_le_bytes();
             self.push(addresses[1]);
             self.push(addresses[0]);
             self.push(self.p.bitand(!(1 << 5)));
             self.pc = self.irq_vector;
 
-            self.set_interrupt_flag(true)
+            self.set_interrupt_disable_flag(true)
         }
     }
 
     pub fn step(&mut self) -> CpuResult {
         // println!("PC = {:#06x}", self.pc);
         if let Some(is_on) = self.delayed_i_flag {
-            self.set_interrupt_flag(is_on as bool);
+            self.set_interrupt_disable_flag(is_on as bool);
             self.delayed_i_flag = None;
         }
 
@@ -1087,7 +1087,7 @@ impl Cpu {
 
                 self.delayed_i_flag = Some(value & 4 != 0);
 
-                self.set_interrupt_flag(current_i_flag);
+                self.set_interrupt_disable_flag(current_i_flag);
 
                 cycles(4)
             }
@@ -1813,7 +1813,7 @@ impl Cpu {
     }
 
     #[inline(always)]
-    fn set_interrupt_flag(&mut self, is_on: bool) {
+    fn set_interrupt_disable_flag(&mut self, is_on: bool) {
         self.set_p_flag(2, is_on);
     }
 
