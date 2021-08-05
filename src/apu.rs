@@ -352,7 +352,7 @@ impl TriangleChannel {
 
     fn get_current_volume(&self) -> u8 {
         if self.timer < 2 && self.current_timer == 0 {
-            7
+            0
         } else if self.tri_step & 0x10 != 0 {
             self.tri_step ^ 0x1f
         } else {
