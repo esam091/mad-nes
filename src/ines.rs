@@ -309,9 +309,9 @@ impl TxROM {
 
 impl Mapper for TxROM {
     fn write_address(&mut self, _prg_rom: &[u8], address: u16, value: u8) {
-        if address >= 0xc000 {
-            println!("TxROM write {:#06X}: {:#04X}", address, value);
-        }
+        // if address >= 0xc000 {
+        //     println!("TxROM write {:#06X}: {:#04X}", address, value);
+        // }
         let is_odd = address % 2 != 0;
 
         match (address, is_odd) {
@@ -424,7 +424,7 @@ impl Mapper for TxROM {
                 if self.current_irq_counter > 0 {
                     self.current_irq_counter -= 1;
                 }
-                dbg!(self.current_irq_counter);
+                // dbg!(self.current_irq_counter);
                 self.toggle_pending_irq_if_possible();
             }
         }
