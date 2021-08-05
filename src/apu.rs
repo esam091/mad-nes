@@ -600,6 +600,10 @@ impl FrameCounter {
         self.cpu_cycles = 0;
         self.mode_flag = value & 0x80 != 0;
         self.irq_inhibit_flag = value & 0x40 != 0;
+
+        if self.irq_inhibit_flag {
+            self.irq_pending = false;
+        }
     }
 
     fn can_toggle_irq(&self) -> bool {
