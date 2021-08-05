@@ -904,17 +904,16 @@ impl Ppu {
             return false;
         }
 
-        // if self.control.contains(
-        //     PpuControl::BACKGROUND_PATTERN_TABLE_FLAG | PpuControl::SPRITE_PATTERN_TABLE_FLAG,
-        // ) {
+        // if self.control
+        //     & (PpuControl::BACKGROUND_PATTERN_TABLE_FLAG | PpuControl::SPRITE_PATTERN_TABLE_FLAG)
+        //     == PpuControl::empty()
+        // {
         //     return false;
         // }
 
-        if !self
-            .control
-            .contains(PpuControl::BACKGROUND_PATTERN_TABLE_FLAG)
-            && !self.control.contains(PpuControl::SPRITE_PATTERN_TABLE_FLAG)
-        {
+        if self.control.contains(
+            PpuControl::BACKGROUND_PATTERN_TABLE_FLAG | PpuControl::SPRITE_PATTERN_TABLE_FLAG,
+        ) {
             return false;
         }
 
