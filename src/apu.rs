@@ -252,7 +252,8 @@ impl PulseChannel {
         };
 
         if self.sweep.negate {
-            self.timer - add - extra
+            // TODO: prevent overflow?
+            self.timer.wrapping_sub(add + extra)
         } else {
             self.timer + add
         }
