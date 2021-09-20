@@ -114,7 +114,7 @@ fn video_ram_widget(buffer: &VideoMemoryBuffer) -> Table {
     table
 }
 
-const SCALE: u32 = 2;
+const SCALE: u32 = 3;
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
@@ -128,15 +128,15 @@ fn main() -> Result<(), String> {
         .build()
         .unwrap();
 
-    let debugger_canvas = video_subsystem
-        .window("Ppu Debugger", 1256, 775)
-        .build()
-        .unwrap()
-        .into_canvas()
-        .accelerated()
-        .target_texture()
-        .build()
-        .unwrap();
+    // let debugger_canvas = video_subsystem
+    //     .window("Ppu Debugger", 1256, 775)
+    //     .build()
+    //     .unwrap()
+    //     .into_canvas()
+    //     .accelerated()
+    //     .target_texture()
+    //     .build()
+    //     .unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     let canvas = window
@@ -150,8 +150,8 @@ fn main() -> Result<(), String> {
 
     let mut renderer = Renderer::new(canvas, &texture_creator);
 
-    let debug_texture = debugger_canvas.texture_creator();
-    let mut debug_renderer = PpuDebugger::new(debugger_canvas, &debug_texture);
+    // let debug_texture = debugger_canvas.texture_creator();
+    // let mut debug_renderer = PpuDebugger::new(debugger_canvas, &debug_texture);
 
     let mut machine = Machine::load(&args[1], Apu::new(sdl_context.audio().unwrap())).unwrap();
     // let stdout = io::stdout()
@@ -233,7 +233,7 @@ fn main() -> Result<(), String> {
 
             let frame_start = SystemTime::now();
             renderer.render(&machine.get_ppu());
-            debug_renderer.render(&machine.get_ppu());
+            // debug_renderer.render(&machine.get_ppu());
             let frame_duration = SystemTime::now().duration_since(frame_start).unwrap();
             // dbg!(frame_duration);
 
